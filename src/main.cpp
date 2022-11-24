@@ -1,7 +1,5 @@
 #include "main.h"
 
-#define GLSL_VERSION "#version 450"
-
 int main(int argc, char *argv[])
 {
 
