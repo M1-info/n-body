@@ -24,39 +24,16 @@ int main(int argc, char *argv[])
     if (current_rank == 0)
     {
 
-        GLFWwindow *window;
+        // init render
+        Render render(800, 600);
+        render.init();
 
-        /* Initialize the library */
-        if (!glfwInit())
-            return -1;
 
-        /* Create a windowed mode window and its OpenGL context */
-        window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
-        if (!window)
-        {
-            glfwTerminate();
-            return -1;
-        }
+        // main loop
+        render.render();
 
-        /* Make the window's context current */
-        glfwMakeContextCurrent(window);
-
-        /* Loop until the user closes the window */
-        while (!glfwWindowShouldClose(window))
-        {
-            /* Render here */
-            glClear(GL_COLOR_BUFFER_BIT);
-            glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-
-            /* Swap front and back buffers */
-            glfwSwapBuffers(window);
-
-            /* Poll for and process events */
-            glfwPollEvents();
-        }
-
-        glfwDestroyWindow(window);
-        glfwTerminate();
+        // terminate render
+        render.terminate();
     }
 
     MPI_Finalize();

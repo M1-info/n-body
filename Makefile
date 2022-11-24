@@ -30,4 +30,4 @@ clean:
 		rm -rf *.o
 
 mrproper: clean
-		rm -rf $(BIN)$(EXEC)
+		rm -rf $(BINMAIN)$(EXEC)
