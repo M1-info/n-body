@@ -1,18 +1,4 @@
-#include <ostream>
-#include <iostream>
-
-#include <mpi.h>
-
-#include <GLFW/glfw3.h>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-/*
-#include <imgui/imgui.h>
-#include <imgui/imgui_impl_glfw.h>
-#include <imgui/imgui_impl_opengl3.h>
-*/
+#include "main.h"
 
 #define GLSL_VERSION "#version 450"
 
@@ -56,7 +42,6 @@ int main(int argc, char *argv[])
 
         /* Make the window's context current */
         glfwMakeContextCurrent(window);
-
 
         /*
         // Setup Dear ImGui context
@@ -132,7 +117,6 @@ int main(int argc, char *argv[])
 
         glfwDestroyWindow(window);
         glfwTerminate();
-
     }
 
     MPI_Finalize();
