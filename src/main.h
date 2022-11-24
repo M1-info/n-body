@@ -11,6 +11,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Body.h"
+
 #define GLSL_VERSION "#version 450"
 #define GRAVITY_CONSTANT 6.67408e-11
 
