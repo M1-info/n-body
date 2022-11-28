@@ -3,6 +3,7 @@
 
 #define GLSL_VERSION "#version 410"
 
+#include "glad/include/glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include "imgui/imgui.h"

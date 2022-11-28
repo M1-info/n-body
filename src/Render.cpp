@@ -49,6 +49,12 @@ void Render::init()
     glfwSetWindowUserPointer(m_window, this);
     glfwSetWindowSizeCallback(m_window, resize);
 
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        std::cout << "Failed to initialize GLAD" << std::endl;
+        return;
+    }
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
@@ -98,7 +104,7 @@ void Render::render()
                 ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
             }
 
-            ImGui::Begin("Bacground Color");
+            ImGui::Begin("Background Color");
             ImGui::Text("Change the background color");
             ImGui::ColorEdit3("Clear Color", (float *)&m_clear_color);
             ImGui::End();

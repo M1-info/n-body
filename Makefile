@@ -1,7 +1,7 @@
 CCC=mpicxx
 
-CFLAGS=-std=c++17 -Wall -I /urs/local/include
-LDFLAGS= -lGL -lglfw -lm
+CFLAGS=-std=c++17 -Wall -I /urs/local/include -I src/glad/include
+LDFLAGS=-L src/glad/src -lGL -lglad -lglfw -lm
 
 DEBUBFLAG=-g
 
