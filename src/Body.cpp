@@ -1,11 +1,11 @@
 #include "Body.h"
 
-Body::Body() : position(glm::vec2(0.0f)), velocity(glm::vec2(0.0f)), mass(0.0f), radius(0.0f)
+Body::Body() : m_position(glm::vec2(0.0f)), m_velocity(glm::vec2(0.0f)), m_mass(0.0f), m_radius(0.0f)
 {
 }
 
 Body::Body(glm::vec2 position, glm::vec2 velocity, float mass, float radius)
-    : position(position), velocity(velocity), mass(mass), radius(radius)
+    : m_position(position), m_velocity(velocity), m_mass(mass), m_radius(radius)
 {
 }
 
@@ -13,42 +13,52 @@ Body::~Body()
 {
 }
 
-glm::vec2 Body::getPosition()
+glm::vec2 Body::getPosition() const
 {
-    return position;
+    return m_position;
 }
 
-glm::vec2 Body::getVelocity()
+glm::vec2 Body::getVelocity() const
 {
-    return velocity;
+    return m_velocity;
 }
 
-float Body::getMass()
+float Body::getMass() const
 {
-    return mass;
+    return m_mass;
 }
 
-float Body::getRadius()
+float Body::getRadius() const
 {
-    return radius;
+    return m_radius;
+}
+
+glm::vec2 Body::getForces() const
+{
+    return m_forces;
 }
 
 void Body::setPosition(glm::vec2 position)
 {
-    this->position = position;
+    m_position = position;
 }
 
 void Body::setVelocity(glm::vec2 velocity)
 {
-    this->velocity = velocity;
+    m_velocity = velocity;
 }
 
 void Body::setMass(float mass)
 {
-    this->mass = mass;
+    m_mass = mass;
 }
 
 void Body::setRadius(float radius)
 {
-    this->radius = radius;
+    m_radius = radius;
+}
+
+void Body::setForces(glm::vec2 forces)
+{
+    m_forces = forces;
 }

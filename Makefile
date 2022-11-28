@@ -1,30 +1,25 @@
 CCC=mpicxx
 
-IMGUI_DIR = include/imgui
-
-CFLAGS=-std=c++17 -Wall -I /urs/local/include #-I $(IMGUI_DIR)
+CFLAGS=-std=c++17 -Wall -I /urs/local/include
 LDFLAGS= -lGL -lglfw -lm
-#LDFLAGS= -L $(IMGUI_DIR) -lGL -lglfw -lm -limgui 
 
 DEBUBFLAG=-g
 
-SRC = $(wildcard src/*.cpp)
-#SRC += $(wildcard $(IMGUI_DIR)/*.cpp)
-OBJ = $(SRC:src/.cpp=.o)
+SRC = $(wildcard src/imgui/*.cpp)
+SRC += $(wildcard src/*.cpp)
+OBJ = $(SRC:src/include/imgui/.cpp=.o)
+OBJ += $(SRC:src/.cpp=.o)
 BINMAIN = ./bin/
-#BINOBJ = ./obj/
+BINOBJ = ./obj/
 EXEC = N-Body
 
 all: $(EXEC)
 
 $(EXEC): $(OBJ)
-		$(CCC) $(DEBUBFLAG) -o $(BINMAIN)$@ $^ $(LDFLAGS)
+		$(CCC) -std=c++17 $(DEBUBFLAG) -o $(BINMAIN)$@ $^ $(LDFLAGS)
 
 %.o: %.cpp
-		$(CCC) $(DEBUBFLAG) -o $@ -c $< $(CFLAGS)
-
-# %.o: $(IMGUI_DIR)/%.cpp
-# 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+		$(CCC) -std=c++17 $(DEBUBFLAG) -o $@ -c $< $(CFLAGS)
 
 clean:
 		rm -rf *.o
