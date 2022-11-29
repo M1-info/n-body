@@ -1,4 +1,6 @@
 #include "main.h"
+#include <chrono>
+#include <unistd.h>
 
 int main(int argc, char *argv[])
 {
@@ -32,6 +34,23 @@ int main(int argc, char *argv[])
         render.render();
         */
 
+
+        auto start = std::chrono::high_resolution_clock::now();
+        int seconds_passed = 0;
+        
+        while (true)
+        {
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsed_seconds = end-start;
+
+            if ((int)elapsed_seconds.count() > seconds_passed)
+            {   
+                seconds_passed++;
+                printf("1 second elapsed\n");
+                std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
+            }
+        }
+        
 
     }
 
