@@ -19,24 +19,20 @@ int main(int argc, char *argv[])
     int name_length;
     MPI_Get_processor_name(hostname, &name_length);
 
-    std::vector<Body> bodies = std::vector<Body>(2);
-
-    for (auto body : bodies)
-    {
-        body.setForces(glm::vec2(0.0f));
-        body.setMass(1.0f);
-    }
-
     printf("Number of tasks = %d. My rank = %d. Running on %s\n", world_size, current_rank, hostname);
 
     if (current_rank == 0)
     {
+        /* No opengl for the moment
         // init render
         Render render(800, 600);
         render.init();
 
         // main loop
         render.render();
+        */
+
+
     }
 
     MPI_Finalize();

@@ -9,7 +9,7 @@
 #include <mpi.h>
 
 #include "Body.h"
-#include "Render.h"
+// #include "Render.h"
 
 #define GRAVITY_CONSTANT 6.67408e-11
 
