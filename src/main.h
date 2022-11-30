@@ -5,6 +5,9 @@
 #include <iostream>
 #include <iterator>
 #include <vector>
+#include <cstdlib>
+#include <time.h>
+#include <thread>
 
 #include <mpi.h>
 
