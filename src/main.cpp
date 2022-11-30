@@ -1,22 +1,12 @@
 #include "main.h"
-#include <chrono>
-#include <unistd.h>
 
 std::vector<Body *> bodies;
-
-void run()
-{
-    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-    std::cout << "good morning" << std::endl;
-}
 
 int main(int argc, char *argv[])
 {
 
-    // float initialTime = clock();
-    // int elapsedTime = 0;
-
-    srand(time(NULL));
+    auto start = std::chrono::high_resolution_clock::now();
+    auto last = start;
 
     // init MPI
     MPI_Init(&argc, &argv);
@@ -36,53 +26,45 @@ int main(int argc, char *argv[])
 
     printf("Number of tasks = %d. My rank = %d. Running on %s\n", world_size, current_rank, hostname);
 
-    if (current_rank == 0)
+    srand(time(NULL) + current_rank);
+
+    Body *body = new Body();
+    glm::vec2 position = glm::vec2(rand() % 6, rand() % 6);
+    glm::vec2 velocity = glm::vec2(rand() % 6, rand() % 6);
+    float mass = rand() % 6;
+
+    body->setMass(mass);
+    body->setPosition(position);
+    body->setVelocity(velocity);
+    std::cout << body->getId() << std::endl;
+    
+
+    while (true)
     {
-        /* No opengl for the moment */
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_time = end - last;
 
-        /* No opengl for the moment
-        // init render
-        Render render(800, 600);
-        render.init();
-
-        // main loop
-        render.render();
-        */
-
-        for (int i = 0; i < world_size; i++)
+        if (elapsed_time.count() >= TIME_STEP)
         {
-            Body *body = new Body();
+            // update bodies
+            glm::vec2 pos = body->getPosition();
+            float data[4] = { body->getId(), body->getMass(), pos[0], pos[1] };
+            float received_data[4 * world_size];
+            
 
-            glm::vec2 position = glm::vec2(rand() % 6, rand() % 6);
-            glm::vec2 velocity = glm::vec2(rand() % 6, rand() % 6);
-            float mass = rand() % 6;
+            MPI_Allgather(&data, 4, MPI_FLOAT, &received_data, 4, MPI_FLOAT, MPI_COMM_WORLD);
 
-            body->setMass(mass);
-            body->setPosition(position);
-            body->setVelocity(velocity);
-            bodies.push_back(body);
-
-            body->debug();
-        }
-
-        auto start = std::chrono::high_resolution_clock::now();
-        auto last = start;
-
-        while (true)
-        {
-            auto end = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed_time = end - last;
-
-            if (elapsed_time.count() >= TIME_STEP)
-            {
-                // update bodies
-
-                last = end;
-                std::chrono::duration<double> elapsed_seconds = end - start;
-                std::cout << "elapsed time from start : " << elapsed_seconds.count() << "s" << std::endl;
+            int taille = sizeof(received_data) / sizeof(float);
+            for(int i=0; i<taille; i+=4){
+                std::cout << received_data[i] << " - " << received_data[i+1] << " - " << received_data[i+2] << " - " << received_data[i+3] << std::endl;
             }
+
+            last = end;
+            std::chrono::duration<double> elapsed_seconds = end - start;
+            std::cout << "elapsed time from start : " << elapsed_seconds.count() << "s" << std::endl;
         }
     }
+    
 
     MPI_Finalize();
     return 0;

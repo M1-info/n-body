@@ -8,6 +8,7 @@
 class Body
 {
 private:
+    float m_id;
     glm::vec2 m_position; // in meters
     glm::vec2 m_velocity;
     glm::vec2 m_forces;
@@ -19,6 +20,7 @@ public:
     Body(glm::vec2 position, glm::vec2 velocity, float mass, float radius);
     ~Body();
 
+    float getId() const;
     glm::vec2 getPosition() const;
     glm::vec2 getVelocity() const;
     float getMass() const;

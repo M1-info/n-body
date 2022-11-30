@@ -2,15 +2,22 @@
 
 Body::Body() : m_position(glm::vec2(0.0f)), m_velocity(glm::vec2(0.0f)), m_mass(0.0f), m_radius(0.0f), m_forces(glm::vec2(0.0f))
 {
+    m_id = rand() % 999999999;
 }
 
 Body::Body(glm::vec2 position, glm::vec2 velocity, float mass, float radius)
     : m_position(position), m_velocity(velocity), m_mass(mass), m_radius(radius), m_forces(glm::vec2(0.0f))
 {
+    m_id = rand() % 999999999;
 }
 
 Body::~Body()
 {
+}
+
+float Body::getId() const
+{
+    return m_id;
 }
 
 glm::vec2 Body::getPosition() const
@@ -65,17 +72,12 @@ void Body::setForces(glm::vec2 forces)
 
 void Body::computeForces(const std::vector<Body *> &bodies)
 {
-    glm::vec2 forces = glm::vec2(0.0f);
-
-    for (Body *body : bodies)
-    {
-        glm::vec2 distance = this->getPosition() - body->getPosition();
-    }
+    
 }
 
 void Body::debug() const
 {
-    std::cout << "Body" << std::endl;
+    std::cout << "Body id-" << m_id << std::endl;
     std::cout << "Position: " << m_position.x << ", " << m_position.y << std::endl;
     std::cout << "Velocity: " << m_velocity.x << ", " << m_velocity.y << std::endl;
     std::cout << "Mass: " << m_mass << std::endl;
