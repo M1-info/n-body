@@ -25,30 +25,27 @@ int main(int argc, char *argv[])
 
     if (current_rank == 0)
     {
-        /* No opengl for the moment
-        // init render
-        Render render(800, 600);
-        render.init();
-
-        // main loop
-        render.render();
-        */
+        /* No opengl for the moment */
 
 
         auto start = std::chrono::high_resolution_clock::now();
-        int seconds_passed = 0;
+        auto last = start;
         
         while (true)
         {
             auto end = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed_seconds = end-start;
+            std::chrono::duration<double> elapsed_time = end-last;
 
-            if ((int)elapsed_seconds.count() > seconds_passed)
-            {   
-                seconds_passed++;
-                printf("1 second elapsed\n");
-                std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
+            if(elapsed_time.count() >= TIME_STEP)
+            {
+                // update bodies
+
+
+                last = end;
+                std::chrono::duration<double> elapsed_seconds = end-start;
+                std::cout << "elapsed time from start : " << elapsed_seconds.count() << "s" << std::endl;
             }
+
         }
         
 

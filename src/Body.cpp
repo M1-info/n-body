@@ -1,11 +1,12 @@
 #include "Body.h"
 
-Body::Body() : m_position(glm::vec2(0.0f)), m_velocity(glm::vec2(0.0f)), m_mass(0.0f), m_radius(0.0f)
+
+Body::Body() : m_position(glm::vec2(0.0f)), m_velocity(glm::vec2(0.0f)), m_mass(0.0f), m_radius(0.0f), m_forces(glm::vec2(0.0f))
 {
 }
 
 Body::Body(glm::vec2 position, glm::vec2 velocity, float mass, float radius)
-    : m_position(position), m_velocity(velocity), m_mass(mass), m_radius(radius)
+    : m_position(position), m_velocity(velocity), m_mass(mass), m_radius(radius), m_forces(glm::vec2(0.0f))
 {
 }
 
@@ -61,4 +62,13 @@ void Body::setRadius(float radius)
 void Body::setForces(glm::vec2 forces)
 {
     m_forces = forces;
+}
+
+
+void Body::computeForces(const std::vector<Body*> &bodies){
+    glm::vec2 forces = glm::vec2(0.0f);
+    
+    for (Body *body : bodies){
+        glm::vec2 distance = this->getPosition() - body->getPosition();
+    }
 }

@@ -2,14 +2,16 @@
 #define BODY_H
 
 #include <glm/glm.hpp>
+#include <vector>
+#include <iostream>
 
 class Body
 {
 private:
-    glm::vec2 m_position;
+    glm::vec2 m_position;   // in meters
     glm::vec2 m_velocity;
     glm::vec2 m_forces;
-    float m_mass;
+    float m_mass;           // in kg
     float m_radius;
 
 public:
@@ -28,6 +30,8 @@ public:
     void setMass(float mass);
     void setRadius(float radius);
     void setForces(glm::vec2 force);
+
+    void computeForces(const std::vector<Body*> &bodies);
 };
 
 #endif // BODY_H
