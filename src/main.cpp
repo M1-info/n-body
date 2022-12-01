@@ -29,35 +29,59 @@ int main(int argc, char *argv[])
     srand(time(NULL) + current_rank);
 
     Body *body = new Body();
-    glm::vec2 position = glm::vec2(rand() % 6, rand() % 6);
-    glm::vec2 velocity = glm::vec2(rand() % 6, rand() % 6);
-    float mass = rand() % 6;
+    glm::vec2 position = glm::vec2(rand() % 6 + 1, rand() % 6 + 1);
+    glm::vec2 velocity = glm::vec2(rand() % 6 + 1, rand() % 6 + 1);
+    float mass = rand() % 6 + 1;
 
     body->setMass(mass);
     body->setPosition(position);
     body->setVelocity(velocity);
-    std::cout << body->getId() << std::endl;
-    
+
+    body->debug();
+
 
     while (true)
     {
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed_time = end - last;
+         auto end = std::chrono::high_resolution_clock::now();
+         std::chrono::duration<double> elapsed_time = end - last;
 
         if (elapsed_time.count() >= TIME_STEP)
         {
             // update bodies
             glm::vec2 pos = body->getPosition();
-            float data[4] = { body->getId(), body->getMass(), pos[0], pos[1] };
-            float received_data[4 * world_size];
+            std::vector<float> data;
+            data.resize(4);
+            data = { body->getId(), body->getMass(), pos[0], pos[1] };
+            std::vector<float> received_data;
+            received_data.resize(4 * world_size);
             
 
-            MPI_Allgather(&data, 4, MPI_FLOAT, &received_data, 4, MPI_FLOAT, MPI_COMM_WORLD);
+            MPI_Allgather(data.data(), 4, MPI_FLOAT, received_data.data(), 4, MPI_FLOAT, MPI_COMM_WORLD);
+
+            glm::vec2 forces_on_body(0,0);
 
             int taille = sizeof(received_data) / sizeof(float);
             for(int i=0; i<taille; i+=4){
-                std::cout << received_data[i] << " - " << received_data[i+1] << " - " << received_data[i+2] << " - " << received_data[i+3] << std::endl;
+                float id = received_data[i];
+
+                if(id == body->getId())
+                    continue;
+
+                float mass_other = received_data[i+1];
+                glm::vec2 position_other (received_data[i+2], received_data[i+3]);
+
+                
+                forces_on_body += body->computeForces(mass_other, position_other);
             }
+
+            forces_on_body *= -GRAVITY_CONSTANT * body->getMass();
+            body->setForces(forces_on_body);
+            //std::cout << "forces on particules : " << forces_on_body.x << " - " << forces_on_body.y << std::endl;
+            body->computePosition((float)elapsed_time.count());
+            body->computeVelocity((float)elapsed_time.count());
+
+            body->debug();
+
 
             last = end;
             std::chrono::duration<double> elapsed_seconds = end - start;

@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <iostream>
+#include <math.h>
 
 class Body
 {
@@ -33,7 +34,9 @@ public:
     void setRadius(float radius);
     void setForces(glm::vec2 force);
 
-    void computeForces(const std::vector<Body *> &bodies);
+    glm::vec2 computeForces(float mass, glm::vec2 position);
+    void computePosition(float delta_time);
+    void computeVelocity(float delta_time);
 
     void debug() const;
 };

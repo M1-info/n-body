@@ -70,9 +70,22 @@ void Body::setForces(glm::vec2 forces)
     m_forces = forces;
 }
 
-void Body::computeForces(const std::vector<Body *> &bodies)
+glm::vec2 Body::computeForces(float mass, glm::vec2 position)
 {
-    
+    glm::vec2 distance = m_position - position;
+    float norm = sqrt(distance[0] * distance[0] + distance[1] * distance[1]);
+
+    return distance * (mass / powf(norm, 3));
+}
+
+void Body::computePosition(float delta_time)
+{
+    m_position += delta_time * m_velocity;
+}
+
+void Body::computeVelocity(float delta_time)
+{
+    m_velocity += delta_time * m_forces / m_mass;
 }
 
 void Body::debug() const
