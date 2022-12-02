@@ -1,13 +1,13 @@
 #ifndef BODY_H
 #define BODY_H
 
-#include <glm/glm.hpp>
+#include "utils.h"
+
 #include <vector>
 #include <iostream>
 #include <math.h>
 
-typedef double NBodyType;
-typedef glm::dvec2 Vec2;
+
 
 class Body
 {

@@ -2,13 +2,13 @@
 
 Body::Body() : m_position(Vec2(0.0f)), m_velocity(Vec2(0.0f)), m_mass(0.0f), m_radius(0.0f), m_forces(Vec2(0.0f))
 {
-    m_id = rand() % 999999999;
+    m_id = randMinmax(1, 999999999);
 }
 
 Body::Body(Vec2 position, Vec2 velocity, NBodyType mass, NBodyType radius)
     : m_position(position), m_velocity(velocity), m_mass(mass), m_radius(radius), m_forces(Vec2(0.0f))
 {
-    m_id = rand() % 999999999;
+    m_id = randMinmax(1, 999999999);
 }
 
 Body::~Body()
