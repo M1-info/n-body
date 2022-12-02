@@ -1,12 +1,12 @@
 #include "Body.h"
 
-Body::Body() : m_position(glm::vec2(0.0f)), m_velocity(glm::vec2(0.0f)), m_mass(0.0f), m_radius(0.0f), m_forces(glm::vec2(0.0f))
+Body::Body() : m_position(Vec2(0.0f)), m_velocity(Vec2(0.0f)), m_mass(0.0f), m_radius(0.0f), m_forces(Vec2(0.0f))
 {
     m_id = rand() % 999999999;
 }
 
-Body::Body(glm::vec2 position, glm::vec2 velocity, float mass, float radius)
-    : m_position(position), m_velocity(velocity), m_mass(mass), m_radius(radius), m_forces(glm::vec2(0.0f))
+Body::Body(Vec2 position, Vec2 velocity, NBodyType mass, NBodyType radius)
+    : m_position(position), m_velocity(velocity), m_mass(mass), m_radius(radius), m_forces(Vec2(0.0f))
 {
     m_id = rand() % 999999999;
 }
@@ -15,77 +15,81 @@ Body::~Body()
 {
 }
 
-float Body::getId() const
+NBodyType Body::getId() const
 {
     return m_id;
 }
 
-glm::vec2 Body::getPosition() const
+Vec2 Body::getPosition() const
 {
     return m_position;
 }
 
-glm::vec2 Body::getVelocity() const
+Vec2 Body::getVelocity() const
 {
     return m_velocity;
 }
 
-float Body::getMass() const
+NBodyType Body::getMass() const
 {
     return m_mass;
 }
 
-float Body::getRadius() const
+NBodyType Body::getRadius() const
 {
     return m_radius;
 }
 
-glm::vec2 Body::getForces() const
+Vec2 Body::getForces() const
 {
     return m_forces;
 }
 
-void Body::setPosition(glm::vec2 position)
+void Body::setPosition(Vec2 position)
 {
     m_position = position;
 }
 
-void Body::setVelocity(glm::vec2 velocity)
+void Body::setVelocity(Vec2 velocity)
 {
     m_velocity = velocity;
 }
 
-void Body::setMass(float mass)
+void Body::setMass(NBodyType mass)
 {
     m_mass = mass;
 }
 
-void Body::setRadius(float radius)
+void Body::setRadius(NBodyType radius)
 {
     m_radius = radius;
 }
 
-void Body::setForces(glm::vec2 forces)
+void Body::setForces(Vec2 forces)
 {
     m_forces = forces;
 }
 
-glm::vec2 Body::computeForces(float mass, glm::vec2 position)
+Vec2 Body::computeForces(NBodyType mass, Vec2 position)
 {
-    glm::vec2 distance = m_position - position;
-    float norm = sqrt(distance[0] * distance[0] + distance[1] * distance[1]);
+    // TODO: si position < masse -> le plus gros bouffe l'autre
+    Vec2 distance = m_position - position;
+    NBodyType norm = sqrt(distance.x * distance.x + distance.y * distance.y);
 
-    return distance * (mass / powf(norm, 3));
+    Vec2 res = distance * (mass / pow(norm, 3));
+    //std::cout << "computeForces(" << mass << ", [" << position.x << ", " << position.y << "]) with m_pos [" << m_position.x << ", " << m_position.y << "] = [" << res.x << ", " << res.y << "]      (distance = [" << distance.x << ", " << distance.y << "] - norm = " << norm << ") " << std::endl;
+    return res;
 }
 
-void Body::computePosition(float delta_time)
+void Body::computePosition(NBodyType delta_time)
 {
     m_position += delta_time * m_velocity;
 }
 
-void Body::computeVelocity(float delta_time)
+void Body::computeVelocity(NBodyType delta_time)
 {
     m_velocity += delta_time * m_forces / m_mass;
+    //std::cout << "computeVelocity with delta_time=" << delta_time << ", m_forces=[" << m_forces.x << ", " << m_forces.y << "] and m_mass =" << m_mass << "   =    [" << m_velocity.x << ", " << m_velocity.y << "] " << std::endl;
 }
 
 void Body::debug() const

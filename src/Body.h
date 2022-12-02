@@ -6,37 +6,40 @@
 #include <iostream>
 #include <math.h>
 
+typedef double NBodyType;
+typedef glm::dvec2 Vec2;
+
 class Body
 {
 private:
-    float m_id;
-    glm::vec2 m_position; // in meters
-    glm::vec2 m_velocity;
-    glm::vec2 m_forces;
-    float m_mass; // in kg
-    float m_radius;
+    NBodyType m_id;
+    Vec2 m_position; // in meters
+    Vec2 m_velocity; // in meters by second ??
+    Vec2 m_forces;
+    NBodyType m_mass; // in kg
+    NBodyType m_radius;
 
 public:
     Body();
-    Body(glm::vec2 position, glm::vec2 velocity, float mass, float radius);
+    Body(Vec2 position, Vec2 velocity, NBodyType mass, NBodyType radius);
     ~Body();
 
-    float getId() const;
-    glm::vec2 getPosition() const;
-    glm::vec2 getVelocity() const;
-    float getMass() const;
-    float getRadius() const;
-    glm::vec2 getForces() const;
+    NBodyType getId() const;
+    Vec2 getPosition() const;
+    Vec2 getVelocity() const;
+    NBodyType getMass() const;
+    NBodyType getRadius() const;
+    Vec2 getForces() const;
 
-    void setPosition(glm::vec2 position);
-    void setVelocity(glm::vec2 velocity);
-    void setMass(float mass);
-    void setRadius(float radius);
-    void setForces(glm::vec2 force);
+    void setPosition(Vec2 position);
+    void setVelocity(Vec2 velocity);
+    void setMass(NBodyType mass);
+    void setRadius(NBodyType radius);
+    void setForces(Vec2 force);
 
-    glm::vec2 computeForces(float mass, glm::vec2 position);
-    void computePosition(float delta_time);
-    void computeVelocity(float delta_time);
+    Vec2 computeForces(NBodyType mass, Vec2 position);
+    void computePosition(NBodyType delta_time);
+    void computeVelocity(NBodyType delta_time);
 
     void debug() const;
 };
