@@ -77,8 +77,8 @@ Vec2 Body::computeForces(NBodyType mass, Vec2 position)
     NBodyType norm = sqrt(distance.x * distance.x + distance.y * distance.y);
 
     Vec2 res = distance * (mass / pow(norm, 3));
-    std::cout << "computeForces()" << std::endl;
-    //std::cout << "computeForces(" << mass << ", [" << position.x << ", " << position.y << "]) with m_pos [" << m_position.x << ", " << m_position.y << "] = [" << res.x << ", " << res.y << "]      (distance = [" << distance.x << ", " << distance.y << "] - norm = " << norm << ") " << std::endl;
+    // std::cout << "computeForces()" << std::endl;
+    // std::cout << "computeForces(" << mass << ", [" << position.x << ", " << position.y << "]) with m_pos [" << m_position.x << ", " << m_position.y << "] = [" << res.x << ", " << res.y << "]      (distance = [" << distance.x << ", " << distance.y << "] - norm = " << norm << ") " << std::endl;
     return res;
 }
 
@@ -90,8 +90,8 @@ void Body::computePosition(NBodyType delta_time)
 void Body::computeVelocity(NBodyType delta_time)
 {
     m_velocity += delta_time * m_forces / m_mass;
-    std::cout << "computeVelocity()" << std::endl;
-    //std::cout << "computeVelocity with delta_time=" << delta_time << ", m_forces=[" << m_forces.x << ", " << m_forces.y << "] and m_mass =" << m_mass << "   =    [" << m_velocity.x << ", " << m_velocity.y << "] " << std::endl;
+    // std::cout << "computeVelocity()" << std::endl;
+    // std::cout << "computeVelocity with delta_time=" << delta_time << ", m_forces=[" << m_forces.x << ", " << m_forces.y << "] and m_mass =" << m_mass << "   =    [" << m_velocity.x << ", " << m_velocity.y << "] " << std::endl;
 }
 
 void Body::debug() const
