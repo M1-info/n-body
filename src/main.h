@@ -18,8 +18,9 @@
 // #include "Render.h"
 
 #define GRAVITY_CONSTANT 6.67408e-11 // m / (kg * s^2)
-#define TIME_STEP 1                  // in seconds
+#define TIME_STEP 0.0001                  // in seconds
 #define DATA_SIZE 4
-#define NB_BODY 15000
+#define NB_BODY 800
+#define NB_ITERATIONS 1000
 
 #endif // N_BODY_H
