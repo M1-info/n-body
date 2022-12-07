@@ -5,7 +5,6 @@ int main(int argc, char *argv[])
 
     auto start = std::chrono::high_resolution_clock::now();
     auto last = start;
-    int nb_body;
 
     // init MPI
     MPI_Init(&argc, &argv);
@@ -27,6 +26,7 @@ int main(int argc, char *argv[])
 
     srand(time(NULL) + current_rank);
 
+    int nb_body;
     int nb_body_left;
 
     if (current_rank == 0)
@@ -34,10 +34,7 @@ int main(int argc, char *argv[])
 
         if (world_size > 1)
         {
-            /*
-                Multiple tasks
-                -> root manage and other tasks handle bodies
-            */
+            /* Multiple tasks -> root manage and other tasks handle bodies */
             nb_body = floor(NB_BODY / (world_size - 1));
 
             // Say to other tasks how many bodies they have to handle
@@ -50,10 +47,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            /*
-                Only one task
-                -> root do everything
-            */
+            /* Only one task -> root do everything */
             nb_body = NB_BODY;
         }
     }
@@ -64,7 +58,22 @@ int main(int argc, char *argv[])
         nb_body_left = NB_BODY - nb_body * (world_size - 1);
     }
 
-    // std::cout << "task n° " << current_rank << " manage " << nb_body << " bodies" << std::endl;
+    int recvcounts[world_size];
+    recvcounts[0] = nb_body_left * DATA_SIZE;
+
+    int displs[world_size];
+    displs[0] = 0;
+
+    for (int i = 1; i < world_size; i++)
+    {
+        recvcounts[i] = nb_body * DATA_SIZE;
+        displs[i] = (nb_body_left + nb_body * (i - 1)) * DATA_SIZE;
+    }
+
+    if (current_rank == 0 && world_size > 1)
+    {
+        nb_body = nb_body_left; // root handle remaining bodies
+    }
 
     // create nb_body bodies
     std::vector<Body *> bodies;
@@ -76,44 +85,12 @@ int main(int argc, char *argv[])
 
         Body *body = new Body(position, velocity, mass, 0);
         bodies.push_back(body);
-
-        // body->debug();
     }
 
-    std::cout << bodies.size() << " bodies for rank " << current_rank << std::endl;
+    // std::cout << bodies.size() << " bodies for rank " << current_rank << std::endl;
 
-    std::vector<NBodyType> data;
-    data.resize(DATA_SIZE * nb_body);
-    std::vector<NBodyType> received_data;
-    received_data.resize(DATA_SIZE * NB_BODY);
-
-    int recvcounts[world_size];
-    recvcounts[0] = nb_body_left;
-
-    int displs[world_size];
-    displs[0] = 0;
-
-    for (int i = 1; i < world_size; i++)
-    {
-        recvcounts[i] = nb_body * DATA_SIZE;
-        displs[i] = (nb_body_left + nb_body * (i - 1)) * DATA_SIZE;
-    }
-
-    for (int i = 0; i < world_size; i++)
-    {
-        std::cout << "recevcounts {" << i << "} = " << recvcounts[i] << " ";
-    }
-    std::cout << std::endl;
-    for (int i = 0; i < world_size; i++)
-    {
-        std::cout << "displacements {" << i << "} = " << displs[i] << " ";
-    }
-    std::cout << std::endl;
-
-    if (current_rank == 0)
-    {
-        nb_body = nb_body_left; // root handle remaining bodies
-    }
+    NBodyType data[DATA_SIZE * nb_body];
+    NBodyType received_data[DATA_SIZE * NB_BODY];
 
     /* Main loop */
     while (true)
@@ -130,72 +107,63 @@ int main(int argc, char *argv[])
                 - we store data sent and data received in a vector
             */
 
-            // std::cout << bodies.size() << " bodies for rank " << current_rank << std::endl;
-            for (Body *body : bodies)
+            for (int i = 0; i < nb_body; i++)
             {
-                // std::cout << body->getId() << " body id for rank " << current_rank  << std::endl;
-
-                Vec2 pos = body->getPosition();
-                data.push_back(body->getId());
-                data.push_back(body->getMass());
-                data.push_back(pos.x);
-                data.push_back(pos.y);
+                data[i * DATA_SIZE] = bodies[i]->getId();
+                data[i * DATA_SIZE + 1] = bodies[i]->getMass();
+                data[i * DATA_SIZE + 2] = bodies[i]->getPosition().x;
+                data[i * DATA_SIZE + 3] = bodies[i]->getPosition().y;
             }
 
-            std::cout << "before MPI_Allgather for rank " << current_rank << std::endl;
             MPI_Allgatherv(
-                data.data(),
+                &data[0],
                 DATA_SIZE * nb_body,
                 MPI_DOUBLE,
-                received_data.data(),
+                &received_data[0],
                 &recvcounts[0],
                 &displs[0],
                 MPI_DOUBLE,
-                MPI_COMM_WORLD);
-            std::cout << "after MPI_Allgather for rank " << current_rank << std::endl;
+                MPI_COMM_WORLD
+            );
+
+            // print received data
+            for (int i = 0; i < DATA_SIZE * NB_BODY; i += DATA_SIZE)
+            {
+                std::cout << "received_data[" << i * DATA_SIZE << "] = " << received_data[i * DATA_SIZE] << std::endl;
+                std::cout << "received_data[" << i * DATA_SIZE + 1 << "] = " << received_data[i * DATA_SIZE + 1] << std::endl;
+                std::cout << "received_data[" << i * DATA_SIZE + 2 << "] = " << received_data[i * DATA_SIZE + 2] << std::endl;
+                std::cout << "received_data[" << i * DATA_SIZE + 3 << "] = " << received_data[i * DATA_SIZE + 3] << std::endl;
+            }
 
             /* For each data body received (id, mass and position), compute forces applied on the body */
-            // std::cout << "computeForces for rank " << current_rank  << std::endl;
-
             for (Body *body : bodies)
             {
                 Vec2 forces_on_body(0, 0);
 
-                for (int i = 0; i < received_data.size(); i += DATA_SIZE)
+                for (int i = 0; i < DATA_SIZE * NB_BODY; i += DATA_SIZE)
                 {
                     NBodyType id = received_data[i];
 
                     if (id == body->getId()) // the body also receive his data, no computation in this case
                         continue;
 
-                    NBodyType mass_other = received_data[i + 1];
-                    Vec2 position_other(received_data[i + 2], received_data[i + 3]);
+                    NBodyType mass_other = received_data[i * DATA_SIZE + 1];
+                    Vec2 position_other(received_data[i * DATA_SIZE + 2], received_data[i * DATA_SIZE + 3]);
+
                     forces_on_body += body->computeForces(mass_other, position_other);
                 }
 
                 forces_on_body *= -GRAVITY_CONSTANT * body->getMass();
                 /* We now have force applied on the body, we can compute the new position and velocity of the body */
                 body->setForces(forces_on_body);
-                // std::cout << "forces on particules : " << forces_on_body.x << " - " << forces_on_body.y << std::endl;
-                // std::cout << "forces on particules of " << current_rank << " : " << forces_on_body.x << " - " << forces_on_body.y << std::endl;
 
                 std::chrono::duration<NBodyType> new_elapsed_time = end - last;
                 body->computePosition(new_elapsed_time.count());
                 body->computeVelocity(new_elapsed_time.count());
-                // body->debug();
-                // std::cout << "finish with body for rank " << current_rank  << std::endl;
             }
-
-            data.clear();
-            received_data.clear();
-
-            std::cout << "end for rank " << current_rank << std::endl;
-
-            // MPI_Barrier(MPI_COMM_WORLD);
 
             last = end;
             std::chrono::duration<NBodyType> elapsed_seconds = end - start;
-            // std::cout << "elapsed time from start : " << elapsed_seconds.count() << "s" << std::endl;
         }
     }
 
