@@ -79,18 +79,22 @@ int main(int argc, char *argv[])
     MPI_Bcast(&ids[0], NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
     MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
-    double *data = nullptr;
-    data = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
-    double *received_data = nullptr;
-    received_data = (double *)malloc(SENDED_DATA_SIZE * NB_BODY_TOTAL * sizeof(double));
+    // velocity is created on each process and store own bodies velocity
+    double *velocities = nullptr;
+    velocities = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
 
-    // fill data buffer
+    double *positions = nullptr;
+    positions = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
+    double *received_positions = nullptr;
+    received_positions = (double *)malloc(SENDED_DATA_SIZE * NB_BODY_TOTAL * sizeof(double));
+
+    // fill positions buffer
     for (int i = 0; i < nb_body; i++)
     {
-        data[i * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = 0.0;
-        data[i * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = 0.0;
-        data[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = randMinmax(0, 10);
-        data[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(0, 10);
+        velocities[i * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = 0.0;
+        velocities[i * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = 0.0;
+        positions[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = randMinmax(0, 10);
+        positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(0, 10);
     }
 
     // Start time for perf measurements
@@ -101,16 +105,16 @@ int main(int argc, char *argv[])
     {
 
         MPI_Allgatherv(
-            &data[0],
+            &positions[0],
             SENDED_DATA_SIZE * nb_body,
             MPI_DOUBLE,
-            &received_data[0],
+            &received_positions[0],
             &recvcounts[0],
             &displs[0],
             MPI_DOUBLE,
             MPI_COMM_WORLD);
 
-        /* For each data body received (id, mass and position), compute forces applied on the body */
+        /* For each positions body received (id, mass and position), compute forces applied on the body */
         for (int j = 0; j < nb_body; j++)
         {
             double forces_on_body[2] = {0, 0};
@@ -129,11 +133,11 @@ int main(int argc, char *argv[])
 
                 // get mass and position of the other body
                 double mass_other = masses[k];
-                double position_other[2] = {received_data[k + POSITION_X_INDEX], received_data[k + POSITION_Y_INDEX]};
+                double position_other[2] = {received_positions[k + POSITION_X_INDEX], received_positions[k + POSITION_Y_INDEX]};
 
                 // compute forces applied on the body
-                double position_current[2] = {data[j * SENDED_DATA_SIZE + POSITION_X_INDEX],
-                                              data[j * SENDED_DATA_SIZE + POSITION_Y_INDEX]};
+                double position_current[2] = {positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX],
+                                              positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX]};
 
                 computeForces(position_current, position_other, mass_current, mass_other, &forces_on_body[0]);
             }
@@ -144,17 +148,17 @@ int main(int argc, char *argv[])
             /* compute the new position and velocity of the body */
             double acceleration[2] = {(forces_on_body[0] * DELTA_T) / mass_current, (forces_on_body[1] * DELTA_T) / mass_current};
 
-            double velocity[2] = {data[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] + acceleration[0],
-                                  data[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] + acceleration[1] * DELTA_T};
+            double velocity[2] = {velocities[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] + acceleration[0],
+                                  velocities[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] + acceleration[1] * DELTA_T};
 
-            double position[2] = {data[j * SENDED_DATA_SIZE + POSITION_X_INDEX] + velocity[0] * DELTA_T,
-                                  data[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] + velocity[1] * DELTA_T};
+            double position[2] = {positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] + velocity[0] * DELTA_T,
+                                  positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] + velocity[1] * DELTA_T};
 
             /* update the body */
-            data[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = velocity[0];
-            data[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = velocity[1];
-            data[j * SENDED_DATA_SIZE + POSITION_X_INDEX] = position[0];
-            data[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] = position[1];
+            velocities[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = velocity[0];
+            velocities[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = velocity[1];
+            positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] = position[0];
+            positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] = position[1];
         }
     }
 
@@ -167,8 +171,9 @@ int main(int argc, char *argv[])
     free(masses);
     free(recvcounts);
     free(displs);
-    free(data);
-    free(received_data);
+    free(velocities);
+    free(positions);
+    free(received_positions);
 
     MPI_Finalize();
     return 0;
