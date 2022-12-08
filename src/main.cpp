@@ -27,36 +27,38 @@ int main(int argc, char *argv[])
 
     // compute nb_body to work with for each process
     if (current_rank == HOST_RANK)
-    {
-        if (world_size > 1)
-            nb_body = floor(NB_BODY_TOTAL / (world_size - 1));
-        else
-            nb_body = NB_BODY_TOTAL;
-    }
+        nb_body = floor(NB_BODY_TOTAL / world_size);
 
     // broadcast nb_body to all processes
     MPI_Bcast(&nb_body, 1, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
     // compute nb_body_left
-    nb_body_left = NB_BODY_TOTAL - nb_body * (world_size - 1);
+    nb_body_left = NB_BODY_TOTAL - (nb_body * world_size);
+
+    if (current_rank == HOST_RANK && world_size > 1)
+        nb_body += nb_body_left;
 
     // buffer for recvcounts and displs (used in MPI_Allgatherv)
     int *recvcounts = nullptr;
     recvcounts = (int *)malloc(world_size * sizeof(int));
-    recvcounts[0] = nb_body_left * SENDED_DATA_SIZE;
 
     int *displs = nullptr;
     displs = (int *)malloc(world_size * sizeof(int));
-    displs[0] = 0;
 
-    for (int i = 1; i < world_size; i++)
+    if (current_rank == HOST_RANK)
     {
-        recvcounts[i] = nb_body * SENDED_DATA_SIZE;
-        displs[i] = (nb_body_left + nb_body * (i - 1)) * SENDED_DATA_SIZE;
+        recvcounts[0] = nb_body * SENDED_DATA_SIZE;
+        displs[0] = 0;
+        for (int i = 1; i < world_size; i++)
+        {
+            recvcounts[i] = (nb_body - nb_body_left) * SENDED_DATA_SIZE;
+            displs[i] = (nb_body + ((nb_body - nb_body_left) * (i - 1))) * SENDED_DATA_SIZE;
+        }
     }
 
-    if (current_rank == HOST_RANK && world_size > 1)
-        nb_body = nb_body_left;
+    // broadcast recvcounts and displs to all processes
+    MPI_Bcast(&recvcounts[0], world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(&displs[0], world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
     // buffers for MPI communication
     int *ids = nullptr;
@@ -91,9 +93,6 @@ int main(int argc, char *argv[])
         data[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(0, 10);
     }
 
-    // show how much bodies for each pros
-    printf("Current rank %d have %d bodies \n", current_rank, nb_body);
-
     // Start time for perf measurements
     double start_time = MPI_Wtime();
 
@@ -116,11 +115,8 @@ int main(int argc, char *argv[])
         {
             double forces_on_body[2] = {0, 0};
 
-            // get current body id and mass
-
-            int id_current = ids[current_rank * nb_body + j];
-            // std::cout << "id_current = " << id_current << std::endl;
-            double mass_current = masses[current_rank * nb_body + j];
+            int id_current = ids[current_rank * nb_body + j];         // get current body id
+            double mass_current = masses[current_rank * nb_body + j]; // get current body mass
 
             for (int k = 0; k < SENDED_DATA_SIZE * NB_BODY_TOTAL; k += SENDED_DATA_SIZE)
             {
@@ -164,9 +160,7 @@ int main(int argc, char *argv[])
 
     double end_time = MPI_Wtime();
     if (current_rank == HOST_RANK)
-    {
         printf("Time: %f\n", end_time - start_time);
-    }
 
     // free memory
     free(ids);
