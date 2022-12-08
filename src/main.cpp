@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
     // number of bodies left (if NB_BODY_TOTAL % world_size != 0)
     int nb_body_left;
 
-    // compute nb_body
+    // compute nb_body to work with for each process
     if (current_rank == HOST_RANK)
     {
         if (world_size > 1)
@@ -55,12 +55,28 @@ int main(int argc, char *argv[])
         displs[i] = (nb_body_left + nb_body * (i - 1)) * SENDED_DATA_SIZE;
     }
 
-    if (current_rank == 0 && world_size > 1)
+    if (current_rank == HOST_RANK && world_size > 1)
         nb_body = nb_body_left;
 
-    
-
     // buffers for MPI communication
+    int *ids = nullptr;
+    ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
+    double *masses = nullptr;
+    masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
+
+    if (current_rank == HOST_RANK)
+    {
+        for (int i = 0; i < NB_BODY_TOTAL; i++)
+        {
+            ids[i] = i;
+            masses[i] = randMinmax(10e2, 10e5);
+        }
+    }
+
+    // broadcast ids and masses to all processes
+    MPI_Bcast(&ids[0], NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+
     double *data = nullptr;
     data = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
     double *received_data = nullptr;
@@ -69,13 +85,14 @@ int main(int argc, char *argv[])
     // fill data buffer
     for (int i = 0; i < nb_body; i++)
     {
-        data[i * SENDED_DATA_SIZE + ID_INDEX] = nb_body * current_rank + i;
-        data[i * SENDED_DATA_SIZE + MASS_INDEX] = randMinmax(10e2, 10e5);
         data[i * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = 0.0;
         data[i * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = 0.0;
-        data[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = randMinmax(0, 1000000);
-        data[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(0, 1000000);
+        data[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = randMinmax(0, 10);
+        data[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(0, 10);
     }
+
+    // show how much bodies for each pros
+    printf("Current rank %d have %d bodies \n", current_rank, nb_body);
 
     // Start time for perf measurements
     double start_time = MPI_Wtime();
@@ -92,27 +109,30 @@ int main(int argc, char *argv[])
             &recvcounts[0],
             &displs[0],
             MPI_DOUBLE,
-            MPI_COMM_WORLD
-        );
+            MPI_COMM_WORLD);
 
         /* For each data body received (id, mass and position), compute forces applied on the body */
         for (int j = 0; j < nb_body; j++)
         {
-
             double forces_on_body[2] = {0, 0};
-            double mass_current = data[j * SENDED_DATA_SIZE + MASS_INDEX];
+
+            // get current body id and mass
+
+            int id_current = ids[current_rank * nb_body + j];
+            // std::cout << "id_current = " << id_current << std::endl;
+            double mass_current = masses[current_rank * nb_body + j];
 
             for (int k = 0; k < SENDED_DATA_SIZE * NB_BODY_TOTAL; k += SENDED_DATA_SIZE)
             {
-                double current_id = data[j * SENDED_DATA_SIZE + ID_INDEX];
-                double id = received_data[k + ID_INDEX];
+                // get corresponding id of the other body
+                int id_other = ids[k / SENDED_DATA_SIZE];
 
                 // check if body is not the same
-                if (id == data[j * SENDED_DATA_SIZE + ID_INDEX])
+                if (id_other == id_current)
                     continue;
 
                 // get mass and position of the other body
-                double mass_other = received_data[k + MASS_INDEX];
+                double mass_other = masses[k];
                 double position_other[2] = {received_data[k + POSITION_X_INDEX], received_data[k + POSITION_Y_INDEX]};
 
                 // compute forces applied on the body
@@ -125,20 +145,14 @@ int main(int argc, char *argv[])
             forces_on_body[0] *= -GRAVITATIONAL_CONSTANT * mass_current;
             forces_on_body[1] *= -GRAVITATIONAL_CONSTANT * mass_current;
 
-            //printf("forces en body: %f - %f\n", forces_on_body[0], forces_on_body[1]);
-
-
             /* compute the new position and velocity of the body */
-            double acceleration[2] = {(forces_on_body[0] * DELTA_T) / mass_current, (forces_on_body[1] * DELTA_T)/ mass_current};
-            //std::cout << "acceleration: " << acceleration[0] << " - " << acceleration[1] << std::endl;
+            double acceleration[2] = {(forces_on_body[0] * DELTA_T) / mass_current, (forces_on_body[1] * DELTA_T) / mass_current};
 
-            double velocity[2] = {data[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] + acceleration[0] ,
+            double velocity[2] = {data[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] + acceleration[0],
                                   data[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] + acceleration[1] * DELTA_T};
 
             double position[2] = {data[j * SENDED_DATA_SIZE + POSITION_X_INDEX] + velocity[0] * DELTA_T,
                                   data[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] + velocity[1] * DELTA_T};
-
-            std::cout << "position: " << position[0] << " - " << position[1] << std::endl;
 
             /* update the body */
             data[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = velocity[0];
@@ -149,11 +163,14 @@ int main(int argc, char *argv[])
     }
 
     double end_time = MPI_Wtime();
-
     if (current_rank == HOST_RANK)
+    {
         printf("Time: %f\n", end_time - start_time);
+    }
 
     // free memory
+    free(ids);
+    free(masses);
     free(recvcounts);
     free(displs);
     free(data);
