@@ -1,40 +1,4 @@
-// #include "main.h"
-#include <stdlib.h>
-#include <fstream>
-#include <math.h>
-#include <mpi.h>
-
-#define BODIES_FILE "../assets/bodies.txt"
-#define OUTPUT_FILE "../assets/output.txt"
-
-#define SENDED_DATA_SIZE 6
-#define NB_BODY_TOTAL 800
-#define NB_ITERATIONS 1000
-#define GRAVITATIONAL_CONSTANT 6.67408e-11
-#define DELTA_T 0.0001
-
-#define ID_INDEX 0
-#define MASS_INDEX 1
-#define VELOCITY_X_INDEX 2
-#define VELOCITY_Y_INDEX 3
-#define POSITION_X_INDEX 4
-#define POSITION_Y_INDEX 5
-
-#define HOST_RANK 0
-
-#ifndef DEBUG
-#define DEBUG 1
-#endif
-
-// compute the force between two bodies
-void computeForces(double position_current[2], double position_other[2], double mass_current, double mass_other, double *forces)
-{
-    double dx = position_current[0] - position_other[0];
-    double dy = position_current[1] - position_other[1];
-    double norm = sqrt(dx * dx + dy * dy);
-    forces[0] += (mass_current * mass_other * dx) / (norm * norm * norm);
-    forces[1] += (mass_current * mass_other * dy) / (norm * norm * norm);
-}
+#include "main.h"
 
 int main(int argc, char *argv[])
 {
@@ -94,32 +58,7 @@ int main(int argc, char *argv[])
     if (current_rank == 0 && world_size > 1)
         nb_body = nb_body_left;
 
-    double *bodies = nullptr;
-    bodies = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
-
-    // // fill bodies with data from file
-    if (current_rank == HOST_RANK)
-    {
-        FILE *file = fopen("./assets/bodies.txt", "r");
-
-        if (file == nullptr)
-        {
-            printf("Error opening file \n");
-            exit(1);
-        }
-
-        for (int line = 0; line < NB_BODY_TOTAL; line++)
-        {
-            fscanf(file, "%lf %lf %lf %lf %lf %lf",
-                   &bodies[line * SENDED_DATA_SIZE + ID_INDEX],
-                   &bodies[line * SENDED_DATA_SIZE + MASS_INDEX],
-                   &bodies[line * SENDED_DATA_SIZE + VELOCITY_X_INDEX],
-                   &bodies[line * SENDED_DATA_SIZE + VELOCITY_Y_INDEX],
-                   &bodies[line * SENDED_DATA_SIZE + POSITION_X_INDEX],
-                   &bodies[line * SENDED_DATA_SIZE + POSITION_Y_INDEX]);
-        }
-        fclose(file);
-    }
+    
 
     // buffers for MPI communication
     double *data = nullptr;
@@ -130,12 +69,12 @@ int main(int argc, char *argv[])
     // fill data buffer
     for (int i = 0; i < nb_body; i++)
     {
-        data[i * SENDED_DATA_SIZE + ID_INDEX] = bodies[i * (current_rank + 1) * SENDED_DATA_SIZE + ID_INDEX];
-        data[i * SENDED_DATA_SIZE + MASS_INDEX] = bodies[i * (current_rank + 1) * SENDED_DATA_SIZE + MASS_INDEX];
-        data[i * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = bodies[i * (current_rank + 1) * SENDED_DATA_SIZE + VELOCITY_X_INDEX];
-        data[i * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = bodies[i * (current_rank + 1) * SENDED_DATA_SIZE + VELOCITY_Y_INDEX];
-        data[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = bodies[i * (current_rank + 1) * SENDED_DATA_SIZE + POSITION_X_INDEX];
-        data[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = bodies[i * (current_rank + 1) * SENDED_DATA_SIZE + POSITION_Y_INDEX];
+        data[i * SENDED_DATA_SIZE + ID_INDEX] = nb_body * current_rank + i;
+        data[i * SENDED_DATA_SIZE + MASS_INDEX] = randMinmax(10e2, 10e5);
+        data[i * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = 0.0;
+        data[i * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = 0.0;
+        data[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = randMinmax(0, 1000000);
+        data[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(0, 1000000);
     }
 
     // Start time for perf measurements
@@ -153,7 +92,8 @@ int main(int argc, char *argv[])
             &recvcounts[0],
             &displs[0],
             MPI_DOUBLE,
-            MPI_COMM_WORLD);
+            MPI_COMM_WORLD
+        );
 
         /* For each data body received (id, mass and position), compute forces applied on the body */
         for (int j = 0; j < nb_body; j++)
@@ -179,20 +119,26 @@ int main(int argc, char *argv[])
                 double position_current[2] = {data[j * SENDED_DATA_SIZE + POSITION_X_INDEX],
                                               data[j * SENDED_DATA_SIZE + POSITION_Y_INDEX]};
 
-                computeForces(position_current, position_other, mass_current, mass_other, forces_on_body);
+                computeForces(position_current, position_other, mass_current, mass_other, &forces_on_body[0]);
             }
 
             forces_on_body[0] *= -GRAVITATIONAL_CONSTANT * mass_current;
             forces_on_body[1] *= -GRAVITATIONAL_CONSTANT * mass_current;
 
-            /* compute the new position and velocity of the body */
-            double acceleration[2] = {forces_on_body[0] / mass_current, forces_on_body[1] / mass_current};
+            //printf("forces en body: %f - %f\n", forces_on_body[0], forces_on_body[1]);
 
-            double velocity[2] = {data[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] + acceleration[0] * DELTA_T,
+
+            /* compute the new position and velocity of the body */
+            double acceleration[2] = {(forces_on_body[0] * DELTA_T) / mass_current, (forces_on_body[1] * DELTA_T)/ mass_current};
+            //std::cout << "acceleration: " << acceleration[0] << " - " << acceleration[1] << std::endl;
+
+            double velocity[2] = {data[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] + acceleration[0] ,
                                   data[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] + acceleration[1] * DELTA_T};
 
             double position[2] = {data[j * SENDED_DATA_SIZE + POSITION_X_INDEX] + velocity[0] * DELTA_T,
                                   data[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] + velocity[1] * DELTA_T};
+
+            std::cout << "position: " << position[0] << " - " << position[1] << std::endl;
 
             /* update the body */
             data[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = velocity[0];
@@ -205,10 +151,9 @@ int main(int argc, char *argv[])
     double end_time = MPI_Wtime();
 
     if (current_rank == HOST_RANK)
-        printf("Time: %f", end_time - start_time);
+        printf("Time: %f\n", end_time - start_time);
 
     // free memory
-    free(bodies);
     free(recvcounts);
     free(displs);
     free(data);

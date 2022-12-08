@@ -7,7 +7,7 @@ FILE_NAME = "./assets/bodies.txt"
 f = open(FILE_NAME, "w+").close()
 
 # generate random bodies and write in a file
-for i in range(1000):
+for i in range(BODIES_COUNT):
     id = random.uniform(0, 1000000000)
     m = random.uniform(0, 10)
     vx = random.uniform(-10, 10)

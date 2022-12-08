@@ -4,12 +4,13 @@
 #include <glm/glm.hpp>
 #include <cstdlib>
 #include <random>
-
-typedef double NBodyType;
-typedef glm::dvec2 Vec2;
+#include <math.h>
 
 
-NBodyType randMinmax(NBodyType min, NBodyType max);
+double randMinmax(double min, double max);
+
+// compute the force between two bodies
+void computeForces(double position_current[2], double position_other[2], double mass_current, double mass_other, double *forces);
 
 
 #endif // UTILS_H
