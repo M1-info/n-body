@@ -15,8 +15,8 @@
 #define GRAVITATIONAL_CONSTANT 6.67408e-11 // m / (kg * s^2)
 #define DELTA_T 1                          // in seconds
 #define SENDED_DATA_SIZE 2
-#define NB_BODY_TOTAL 800
-#define NB_ITERATIONS 1000
+#define NB_BODY_TOTAL 10
+#define NB_ITERATIONS 10
 
 #define HOST_RANK 0
 
