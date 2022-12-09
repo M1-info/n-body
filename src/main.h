@@ -16,7 +16,7 @@
 #define DELTA_T 1                          // in seconds
 #define SENDED_DATA_SIZE 2
 #define NB_BODY_TOTAL 10
-#define NB_ITERATIONS 10
+#define NB_ITERATIONS 1
 
 #define HOST_RANK 0
 
@@ -24,5 +24,7 @@
 #define VELOCITY_Y_INDEX 1
 #define POSITION_X_INDEX 0
 #define POSITION_Y_INDEX 1
+#define FORCE_X_INDEX 0
+#define FORCE_Y_INDEX 1
 
 #endif // N_BODY_H
