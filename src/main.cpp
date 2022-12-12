@@ -19,32 +19,38 @@ int main(int argc, char *argv[])
     int name_length;
     MPI_Get_processor_name(hostname, &name_length);
 
-    // number of bodies for each process
-    int nb_body;
+    /*
+        Compute number of bodies for each process
+        - nb_body is the number of bodies for each process
+        - nb_body_left is the number of bodies left if NB_BODY_TOTAL % world_size != 0
+        We add nb_body_left to the first process (HOST_RANK)
+    */
 
-    // number of bodies left (if NB_BODY_TOTAL % world_size != 0)
+    int nb_body;
     int nb_body_left;
 
-    // compute nb_body to work with for each process
     if (current_rank == HOST_RANK)
         nb_body = floor(NB_BODY_TOTAL / world_size);
 
     // broadcast nb_body to all processes
     MPI_Bcast(&nb_body, 1, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
-    // compute nb_body_left
+    /* Only add nb_body_left to host rank if there are remainders bodies */
     nb_body_left = NB_BODY_TOTAL - (nb_body * world_size);
-
     if (current_rank == HOST_RANK && world_size > 1)
         nb_body += nb_body_left;
 
-    // buffer for recvcounts and displs (used in MPI_Allgatherv)
+    /* buffer for recvcounts and displs (used in MPI_Allgatherv)
+        - recvcounts is the number of elements to receive from each process
+        - displs is the displacement relative to recvbuf at which to place the incoming data from each process
+    */
+
     int *recvcounts = nullptr;
     recvcounts = (int *)malloc(world_size * sizeof(int));
-
     int *displs = nullptr;
     displs = (int *)malloc(world_size * sizeof(int));
 
+    // only the host rank compute recvcounts and displs and then broadcast them to all processes
     if (current_rank == HOST_RANK)
     {
         recvcounts[0] = nb_body * SENDED_DATA_SIZE;
@@ -55,12 +61,14 @@ int main(int argc, char *argv[])
             displs[i] = (nb_body + ((nb_body - nb_body_left) * (i - 1))) * SENDED_DATA_SIZE;
         }
     }
-
-    // broadcast recvcounts and displs to all processes
     MPI_Bcast(&recvcounts[0], world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
     MPI_Bcast(&displs[0], world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
-    // buffers for MPI communication
+    /*
+        Create ids and masses, then broadcast them to all processes
+        - ids is the id of each body
+        - masses is the mass of each body
+    */
     int *ids = nullptr;
     ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
     double *masses = nullptr;
@@ -74,25 +82,27 @@ int main(int argc, char *argv[])
             masses[i] = randMinmax(10e2, 10e5);
         }
     }
-
-    // broadcast ids and masses to all processes
     MPI_Bcast(&ids[0], NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
     MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
-    // velocity is created on each process and store own bodies velocity
+    /*
+        Create velocities and positions buffers
+        - velocities is the velocity of each body of the current process
+        - positions is the position of each body of the current process
+        - received_positions is the positions received from all processes
+    */
     double *velocities = nullptr;
     velocities = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
+    memset(velocities, 0, SENDED_DATA_SIZE * nb_body * sizeof(double));
 
     double *positions = nullptr;
     positions = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
     double *received_positions = nullptr;
     received_positions = (double *)malloc(SENDED_DATA_SIZE * NB_BODY_TOTAL * sizeof(double));
 
-    // fill positions buffer
+    // fill positions buffer with random data
     for (int i = 0; i < nb_body; i++)
     {
-        velocities[i * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = 0.0;
-        velocities[i * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = 0.0;
         positions[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = randMinmax(0, 10);
         positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(0, 10);
     }
@@ -104,17 +114,19 @@ int main(int argc, char *argv[])
     for (int i = 0; i < NB_ITERATIONS; i++)
     {
 
+        /*
+            Allgatherv allow to gather data from all processes also if they have different number of elements
+        */
         MPI_Allgatherv(
-            &positions[0],
-            SENDED_DATA_SIZE * nb_body,
-            MPI_DOUBLE,
-            &received_positions[0],
-            &recvcounts[0],
-            &displs[0],
-            MPI_DOUBLE,
-            MPI_COMM_WORLD);
+            &positions[0],              // send buffer
+            SENDED_DATA_SIZE * nb_body, // number of elements to send
+            MPI_DOUBLE,                 // type of elements to send
+            &received_positions[0],     // receive buffer
+            &recvcounts[0],             // number of elements to receive from each process
+            &displs[0],                 // displacement relative to recvbuf at which to place the incoming data from each process
+            MPI_DOUBLE,                 // type of elements to receive
+            MPI_COMM_WORLD);            // communicator
 
-        /* For each positions body received (id, mass and position), compute forces applied on the body */
         for (int j = 0; j < nb_body; j++)
         {
             double forces_on_body[2] = {0, 0};
@@ -122,12 +134,13 @@ int main(int argc, char *argv[])
             int id_current = ids[current_rank * nb_body + j];         // get current body id
             double mass_current = masses[current_rank * nb_body + j]; // get current body mass
 
+            /* We have to loop over all bodies to can compute the forces applied to the current body */
             for (int k = 0; k < SENDED_DATA_SIZE * NB_BODY_TOTAL; k += SENDED_DATA_SIZE)
             {
                 // get corresponding id of the other body
                 int id_other = ids[k / SENDED_DATA_SIZE];
 
-                // check if body is not the same
+                // if the other body is the current body, we skip it
                 if (id_other == id_current)
                     continue;
 
