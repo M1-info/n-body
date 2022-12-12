@@ -19,10 +19,16 @@ int main(int argc, char *argv[])
     int name_length;
     MPI_Get_processor_name(hostname, &name_length);
 
+    // set error handler to return error code instead of aborting
     MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
 
-    // number of bodies for each process
-    // compute nb_body to work with for each process
+    /*
+        Computation of number of bodies for each process
+        We distribute bodies as evenly as possible
+        - nb_body => number of bodies for each process
+        - nb_body_max => highest number of bodies for a process
+        - nb_body_left => number of bodies left after distributing bodies as evenly as possible
+    */
     int nb_body = floor(NB_BODY_TOTAL / world_size);
 
     int nb_body_max;
@@ -37,9 +43,16 @@ int main(int argc, char *argv[])
     {
         nb_body_max = nb_body;
     }
+    // send the highest number of bodies to all processes
+    // so that they can allocate the right amount of memory
     MPI_Bcast(&nb_body_max, 1, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
-    // init bodies
+    /*
+        - velocities => contains the velocities of all bodies for current process
+        - local_forces => contains the forces of all bodies for current process
+        - tmp_forces => contains the forces of all bodies for the process that is currently computing forces
+        - masses => contains the masses of all bodies
+    */
     double *velocities = nullptr;
     velocities = (double *)malloc(nb_body * SENDED_DATA_SIZE * sizeof(double));
     memset(velocities, 0, SENDED_DATA_SIZE * nb_body * sizeof(double));
@@ -55,6 +68,7 @@ int main(int argc, char *argv[])
     double *masses = nullptr;
     masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
+    // masses are calculated only on host process and then sent to all processes
     if (current_rank == HOST_RANK)
     {
         for (int i = 0; i < NB_BODY_TOTAL; i++)
@@ -62,10 +76,14 @@ int main(int argc, char *argv[])
             masses[i] = randMinmax(10e2, 10e5);
         }
     }
-
-    // send masses to all processes
     MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
+    /* allocate memory for all arrays
+        - local_positions => contains the positions of all bodies for current process
+        - tmp_positions => contains the positions of all bodies for the process that is currently computing forces
+        - local_ids => contains the ids of all bodies for current process
+        - tmp_ids => contains the ids of all bodies for the process that is currently computing forces
+    */
     double *local_positions = nullptr;
     local_positions = (double *)malloc(nb_body * SENDED_DATA_SIZE * sizeof(double));
 
@@ -95,23 +113,24 @@ int main(int argc, char *argv[])
         tmp_ids[i] = current_rank + (i * world_size);
     }
 
-    /* Main loop */
-
     double start_time = MPI_Wtime();
 
+    /* Main loop */
     for (int i = 0; i < NB_ITERATIONS; i++)
     {
+
+        /* Iterate through all process */
         for (int j = 0; j < world_size; j++)
         {
 
-            /* 1 - compute forces */
-
+            /* Compute local_forces using tmp_positions and tmp_ids for each process's body */
             for (int k = 0; k < nb_body; ++k)
             {
 
                 // get position, id and mass of current body
                 double current_body_position[2] = {local_positions[k * SENDED_DATA_SIZE + POSITION_X_INDEX],
                                                    local_positions[k * SENDED_DATA_SIZE + POSITION_Y_INDEX]};
+
                 int current_body_id = local_ids[k];
                 double current_body_mass = masses[current_body_id];
 
@@ -120,6 +139,8 @@ int main(int argc, char *argv[])
                     // get id of other body
                     int other_body_id = tmp_ids[l];
 
+                    // if other body is the same as current body, skip (no need to compute force on itself)
+                    // if other body id is lower than current body id, skip too (the other process will compute the force and it back through the ring communication)
                     if (current_body_id <= other_body_id)
                         continue;
 
@@ -135,18 +156,21 @@ int main(int argc, char *argv[])
                     // update local forces and tmp forces
                     local_forces[k * SENDED_DATA_SIZE + FORCE_X_INDEX] += forces[0];
                     local_forces[k * SENDED_DATA_SIZE + FORCE_Y_INDEX] += forces[1];
+
+                    // tmps forces are updated with the opposite force (Newton's third law of motion)
                     tmp_forces[l * SENDED_DATA_SIZE + FORCE_X_INDEX] -= forces[0];
                     tmp_forces[l * SENDED_DATA_SIZE + FORCE_Y_INDEX] -= forces[1];
                 }
             }
 
-            /* 2 - communication */
+            /* Communication */
 
             // send tmp_ids, tmp_pos and tmp_forces to next process
             int dest_proc = (current_rank - 1 + world_size) % world_size;
             int src_proc = (current_rank + 1) % world_size;
-            // std::cout << "src_proc : " << src_proc << ", current_rank : " << current_rank << ", dest_proc : " << dest_proc << std::endl;
 
+            // sendrecv_replace => send and receive in the same buffer
+            // send ids, positions and forces to next process
             MPI_Sendrecv_replace(tmp_ids, nb_body_max, MPI_INT, dest_proc, 0, src_proc, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Sendrecv_replace(tmp_positions, nb_body_max * SENDED_DATA_SIZE, MPI_DOUBLE, dest_proc, 0, src_proc, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Sendrecv_replace(tmp_forces, nb_body_max * SENDED_DATA_SIZE, MPI_DOUBLE, dest_proc, 0, src_proc, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -171,7 +195,7 @@ int main(int argc, char *argv[])
             double position[2] = {local_positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] + velocity[0] * DELTA_T,
                                   local_positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] + velocity[1] * DELTA_T};
 
-            /* update the body */
+            /* update the body positions and velocities */
             velocities[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = velocity[0];
             velocities[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = velocity[1];
             local_positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] = position[0];
