@@ -66,30 +66,18 @@ int main(int argc, char *argv[])
 
     /*
         Create ids and masses, then broadcast them to all processes
-        - ids is the id of each body
-        - masses is the mass of each body
-    */
-    int *ids = nullptr;
-    ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
-    double *masses = nullptr;
-    masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
-    if (current_rank == HOST_RANK)
-    {
-        for (int i = 0; i < NB_BODY_TOTAL; i++)
-        {
-            ids[i] = i;
-            masses[i] = randMinmax(10e2, 10e5);
-        }
-    }
-    MPI_Bcast(&ids[0], NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
-    MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+
+    */
 
     /*
         Create velocities and positions buffers
         - velocities is the velocity of each body of the current process
         - positions is the position of each body of the current process
-        - received_positions is the positions received from all processes
+        - received_positions is the positions received from all processes (used in MPI_Allgatherv)
+        - tmp_positions is a temporary buffer used to get positions from file
+        - ids is the id of each body
+        - masses is the mass of each body
     */
     double *velocities = nullptr;
     velocities = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
@@ -97,15 +85,63 @@ int main(int argc, char *argv[])
 
     double *positions = nullptr;
     positions = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
+
     double *received_positions = nullptr;
     received_positions = (double *)malloc(SENDED_DATA_SIZE * NB_BODY_TOTAL * sizeof(double));
 
-    // fill positions buffer with random data
-    for (int i = 0; i < nb_body; i++)
+    double *tmp_positions = nullptr;
+    tmp_positions = (double *)malloc(NB_BODY_TOTAL * 2 * sizeof(double));
+
+    int *ids = nullptr;
+    ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
+
+    double *masses = nullptr;
+    masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
+
+    /* Host get data from file */
+    if (current_rank == HOST_RANK)
     {
-        positions[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = randMinmax(0, 10);
-        positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(0, 10);
+        FILE *file = fopen(INPUT_FILE, "r");
+
+        int position_count = 0;
+
+        if (file == nullptr)
+        {
+            std::cerr << "Error: cannot open file " << INPUT_FILE << std::endl;
+            exit(1);
+        }
+
+        for (int i = 0; i < NB_BODY_TOTAL; i++)
+        {
+            fscanf(file, "%d %lf %lf %lf",
+                   &ids[i],
+                   &masses[i],
+                   &tmp_positions[position_count + POSITION_X_INDEX],
+                   &tmp_positions[position_count + POSITION_Y_INDEX]);
+
+            position_count += 2;
+        }
+
+        fclose(file);
     }
+
+    /*
+        Scatterv allow to scatter data from one process to all processes also if they have different number of elements
+        Scatter data from host to all processes
+    */
+    MPI_Scatterv(tmp_positions,
+                 recvcounts,
+                 displs,
+                 MPI_DOUBLE,
+                 positions,
+                 recvcounts[current_rank],
+                 MPI_DOUBLE,
+                 HOST_RANK,
+                 MPI_COMM_WORLD);
+
+    // Broadcast ids and masses to all processes
+    MPI_Bcast(&ids[0], NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
     // Start time for perf measurements
     double start_time = MPI_Wtime();
@@ -179,6 +215,28 @@ int main(int argc, char *argv[])
     if (current_rank == HOST_RANK)
         printf("Time: %f\n", end_time - start_time);
 
+    // write the result in a file
+    if (current_rank == HOST_RANK)
+    {
+        FILE *file = fopen(OUTPUT_FILE, "w");
+
+        if (file == nullptr)
+        {
+            std::cerr << "Error: cannot open file " << OUTPUT_FILE << std::endl;
+            exit(1);
+        }
+
+        int position_count = 0;
+
+        for (int i = 0; i < NB_BODY_TOTAL; i++)
+        {
+            fprintf(file, "%d %lf %lf %lf \n", ids[i], masses[i], received_positions[position_count + POSITION_X_INDEX], received_positions[position_count + POSITION_Y_INDEX]);
+            position_count += 2;
+        }
+
+        fclose(file);
+    }
+
     // free memory
     free(ids);
     free(masses);
@@ -187,6 +245,7 @@ int main(int argc, char *argv[])
     free(velocities);
     free(positions);
     free(received_positions);
+    free(tmp_positions);
 
     MPI_Finalize();
     return 0;

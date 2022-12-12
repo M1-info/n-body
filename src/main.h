@@ -26,4 +26,7 @@
 #define POSITION_X_INDEX 0
 #define POSITION_Y_INDEX 1
 
+#define INPUT_FILE "./assets/input.txt"
+#define OUTPUT_FILE "./assets/output.txt"
+
 #endif // N_BODY_H
