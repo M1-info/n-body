@@ -34,6 +34,7 @@ int main(int argc, char *argv[])
     int nb_body_max;
 
     int nb_body_left = NB_BODY_TOTAL - (nb_body * world_size);
+
     if (current_rank < nb_body_left)
     {
         nb_body++;
@@ -43,15 +44,55 @@ int main(int argc, char *argv[])
     {
         nb_body_max = nb_body;
     }
+
     // send the highest number of bodies to all processes
     // so that they can allocate the right amount of memory
     MPI_Bcast(&nb_body_max, 1, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+
+    // show body distribution
+    printf("Process %d has %d bodies", current_rank, nb_body);
+
+    // create rcvcounts and displs arrays for scatterv
+    int *recvcounts_positions = (int *)malloc(world_size * sizeof(int));
+    int *displs_positions = (int *)malloc(world_size * sizeof(int));
+
+    int *recvcounts_ids = (int *)malloc(world_size * sizeof(int));
+    int *displs_ids = (int *)malloc(world_size * sizeof(int));
+
+    if (current_rank == HOST_RANK)
+    {
+        recvcounts_positions[0] = nb_body_max * SENDED_DATA_SIZE;
+        displs_positions[0] = 0;
+        recvcounts_ids[0] = nb_body_max;
+        displs_ids[0] = 0;
+
+        for (int i = 1; i < world_size; i++)
+        {
+   
+            recvcounts_positions[i] = i >= nb_body_left && nb_body_left > 0 ? (nb_body_max - 1) * SENDED_DATA_SIZE : nb_body_max * SENDED_DATA_SIZE;
+            displs_positions[i] = displs_positions[i - 1] + (recvcounts_positions[i - 1]);
+
+            recvcounts_ids[i] = i >= nb_body_left && nb_body_left > 0 ? nb_body_max - 1 : nb_body_max;
+            displs_ids[i] = displs_ids[i - 1] + recvcounts_ids[i - 1];
+        }
+    }
+
+    // send rcvcounts and displs to all processes
+    MPI_Bcast(recvcounts_positions, world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(displs_positions, world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(recvcounts_ids, world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(displs_ids, world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
     /*
         - velocities => contains the velocities of all bodies for current process
         - local_forces => contains the forces of all bodies for current process
         - tmp_forces => contains the forces of all bodies for the process that is currently computing forces
+        - local_positions => contains the positions of all bodies for current process
+        - tmp_positions => contains the positions of all bodies for the process that is currently computing forces
+        - local_ids => contains the ids of all bodies for current process
+        - tmp_ids => contains the ids of all bodies for the process that is currently computing forces
         - masses => contains the masses of all bodies
+        - file_positions => contains the positions of all bodies from input file
     */
     double *velocities = nullptr;
     velocities = (double *)malloc(nb_body * SENDED_DATA_SIZE * sizeof(double));
@@ -65,41 +106,14 @@ int main(int argc, char *argv[])
     tmp_forces = (double *)malloc(nb_body_max * SENDED_DATA_SIZE * sizeof(double));
     memset(tmp_forces, 0, SENDED_DATA_SIZE * nb_body_max * sizeof(double));
 
-    double *masses = nullptr;
-    masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
-
-    // masses are calculated only on host process and then sent to all processes
-    if (current_rank == HOST_RANK)
-    {
-        for (int i = 0; i < NB_BODY_TOTAL; i++)
-        {
-            masses[i] = randMinmax(10e2, 10e5);
-        }
-    }
-    MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
-
-    /* allocate memory for all arrays
-        - local_positions => contains the positions of all bodies for current process
-        - tmp_positions => contains the positions of all bodies for the process that is currently computing forces
-        - local_ids => contains the ids of all bodies for current process
-        - tmp_ids => contains the ids of all bodies for the process that is currently computing forces
-    */
     double *local_positions = nullptr;
     local_positions = (double *)malloc(nb_body * SENDED_DATA_SIZE * sizeof(double));
 
     double *tmp_positions = nullptr;
     tmp_positions = (double *)malloc(nb_body_max * SENDED_DATA_SIZE * sizeof(double));
 
-    for (int i = 0; i < nb_body * SENDED_DATA_SIZE; i += SENDED_DATA_SIZE)
-    {
-        double x = randMinmax(0, 100);
-        double y = randMinmax(0, 100);
-
-        local_positions[i + POSITION_X_INDEX] = x;
-        local_positions[i + POSITION_Y_INDEX] = y;
-        tmp_positions[i + POSITION_X_INDEX] = x;
-        tmp_positions[i + POSITION_Y_INDEX] = y;
-    }
+    double *masses = nullptr;
+    masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
     int *local_ids = nullptr;
     local_ids = (int *)malloc(nb_body * sizeof(int));
@@ -107,10 +121,75 @@ int main(int argc, char *argv[])
     int *tmp_ids = nullptr;
     tmp_ids = (int *)malloc(nb_body_max * sizeof(int));
 
-    for (int i = 0; i < nb_body; ++i)
+    double *file_positions = nullptr;
+    file_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
+
+    int *file_ids = nullptr;
+    file_ids = (int *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(int));
+
+    /* Host get data from file */
+    if (current_rank == HOST_RANK)
     {
-        local_ids[i] = current_rank + (i * world_size);
-        tmp_ids[i] = current_rank + (i * world_size);
+        FILE *file = fopen(INPUT_FILE, "r");
+
+        int position_count = 0;
+
+        if (file == nullptr)
+        {
+            std::cerr << "Error: cannot open file " << INPUT_FILE << std::endl;
+            exit(1);
+        }
+
+        for (int i = 0; i < NB_BODY_TOTAL; i++)
+        {
+            fscanf(file, "%d %lf %lf %lf",
+                   &file_ids[i],
+                   &masses[i],
+                   &file_positions[position_count + POSITION_X_INDEX],
+                   &file_positions[position_count + POSITION_Y_INDEX]);
+
+            position_count += 2;
+        }
+
+        fclose(file);
+    }
+
+    /*
+        Scatterv allow to scatter data from one process to all processes also if they have different number of elements
+        Scatter data from host to all processes
+    */
+    MPI_Scatterv(file_positions,
+                 recvcounts_positions,
+                 displs_positions,
+                 MPI_DOUBLE,
+                 local_positions,
+                 recvcounts_positions[current_rank],
+                 MPI_DOUBLE,
+                 HOST_RANK,
+                 MPI_COMM_WORLD);
+
+    MPI_Scatterv(file_ids,
+                 recvcounts_ids,
+                 displs_ids,
+                 MPI_INT,
+                 local_ids,
+                 recvcounts_ids[current_rank],
+                 MPI_INT,
+                 HOST_RANK,
+                 MPI_COMM_WORLD);
+
+    // send masses to all processes
+    MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+
+    for (int i = 0; i < nb_body * SENDED_DATA_SIZE; i += SENDED_DATA_SIZE)
+    {
+        tmp_positions[i + POSITION_X_INDEX] = local_positions[i + POSITION_X_INDEX];
+        tmp_positions[i + POSITION_Y_INDEX] = local_positions[i + POSITION_Y_INDEX];
+    }
+
+    for (int i = 0; i < nb_body; i++)
+    {
+        tmp_ids[i] = local_ids[i];
     }
 
     double start_time = MPI_Wtime();
@@ -147,6 +226,7 @@ int main(int argc, char *argv[])
                     // get position and mass of other body
                     double other_body_position[2] = {tmp_positions[l * SENDED_DATA_SIZE + POSITION_X_INDEX],
                                                      tmp_positions[l * SENDED_DATA_SIZE + POSITION_Y_INDEX]};
+
                     double other_body_mass = masses[other_body_id];
 
                     // compute force
@@ -190,7 +270,7 @@ int main(int argc, char *argv[])
             double acceleration[2] = {(local_forces[0] * DELTA_T) / mass_current, (local_forces[1] * DELTA_T) / mass_current};
 
             double velocity[2] = {velocities[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] + acceleration[0],
-                                  velocities[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] + acceleration[1] * DELTA_T};
+                                  velocities[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] + acceleration[1]};
 
             double position[2] = {local_positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] + velocity[0] * DELTA_T,
                                   local_positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] + velocity[1] * DELTA_T};
@@ -200,6 +280,7 @@ int main(int argc, char *argv[])
             velocities[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = velocity[1];
             local_positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] = position[0];
             local_positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] = position[1];
+
         }
 
         // reset forces
@@ -210,6 +291,38 @@ int main(int argc, char *argv[])
     double end_time = MPI_Wtime();
     if (current_rank == HOST_RANK)
         printf("Time: %f\n", end_time - start_time);
+
+    // write the result in a file
+    if (current_rank == HOST_RANK)
+    {
+
+        /* Gather all bodies positions and ids */
+        int *output_ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
+        double *output_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
+
+        MPI_Gatherv(local_ids, nb_body, MPI_INT, output_ids, recvcounts_ids, displs_ids, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+        MPI_Gatherv(local_positions, nb_body * SENDED_DATA_SIZE, MPI_DOUBLE, output_positions, recvcounts_positions, displs_positions, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+
+        FILE *file = fopen(OUTPUT_FILE, "w");
+
+        if (file == nullptr)
+        {
+            std::cerr << "Error: cannot open file " << OUTPUT_FILE << std::endl;
+            exit(1);
+        }
+
+        int position_count = 0;
+
+        for (int i = 0; i < NB_BODY_TOTAL; i++)
+        {
+            fprintf(file, "%d %lf %lf %lf \n", output_ids[i], masses[i], output_positions[position_count + POSITION_X_INDEX], output_positions[position_count + POSITION_Y_INDEX]);
+            position_count += 2;
+        }
+
+        fclose(file);
+        free(output_ids);
+        free(output_positions);
+    }
 
     // free memory
     free(masses);

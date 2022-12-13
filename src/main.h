@@ -16,8 +16,8 @@
 #define GRAVITATIONAL_CONSTANT 6.67408e-11 // m / (kg * s^2)
 #define DELTA_T 1                          // in seconds
 #define SENDED_DATA_SIZE 2
-#define NB_BODY_TOTAL 800
-#define NB_ITERATIONS 1000
+#define NB_BODY_TOTAL 4
+#define NB_ITERATIONS 3
 
 #define HOST_RANK 0
 
@@ -27,5 +27,8 @@
 #define POSITION_Y_INDEX 1
 #define FORCE_X_INDEX 0
 #define FORCE_Y_INDEX 1
+
+#define INPUT_FILE "./assets/input.txt"
+#define OUTPUT_FILE "./assets/output.txt"
 
 #endif // N_BODY_H
