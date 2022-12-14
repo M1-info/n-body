@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <random>
 #include <math.h>
+#include <iostream>
 
 
 double randMinmax(double min, double max);
