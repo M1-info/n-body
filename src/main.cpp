@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     */
     int nb_body = floor(NB_BODY_TOTAL / world_size);
 
-    int nb_body_max;
+    int nb_body_max = nb_body;
 
     int nb_body_left = NB_BODY_TOTAL - (nb_body * world_size);
 
@@ -97,8 +97,11 @@ int main(int argc, char *argv[])
         - tmp_positions => contains the positions of all bodies for the process that is currently computing forces
         - local_ids => contains the ids of all bodies for current process
         - tmp_ids => contains the ids of all bodies for the process that is currently computing forces
-        - masses => contains the masses of all bodies
+        - local_masses => contains the masses of all bodies for current process
+        - tmp_masses => contains the masses of all bodies for the process that is currently computing forces
         - file_positions => contains the positions of all bodies from input file
+        - file_ids => contains the ids of all bodies from input file
+        - file_masses => contains the masses of all bodies from input file
     */
     double *velocities = nullptr;
     velocities = (double *)malloc(nb_body * SENDED_DATA_SIZE * sizeof(double));
@@ -118,20 +121,26 @@ int main(int argc, char *argv[])
     double *tmp_positions = nullptr;
     tmp_positions = (double *)malloc(nb_body_max * SENDED_DATA_SIZE * sizeof(double));
 
-    double *masses = nullptr;
-    masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
-
     int *local_ids = nullptr;
     local_ids = (int *)malloc(nb_body * sizeof(int));
 
     int *tmp_ids = nullptr;
     tmp_ids = (int *)malloc(nb_body_max * sizeof(int));
 
+    double *local_masses = nullptr;
+    local_masses = (double *)malloc(nb_body * sizeof(double));
+
+    double *tmp_masses = nullptr;
+    tmp_masses = (double *)malloc(nb_body_max * sizeof(double));
+
     double *file_positions = nullptr;
     file_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
 
     int *file_ids = nullptr;
-    file_ids = (int *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(int));
+    file_ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
+
+    double *file_masses = nullptr;
+    file_masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
     /* Host get data from file */
     if (current_rank == HOST_RANK)
@@ -148,9 +157,9 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < NB_BODY_TOTAL; i++)
         {
-            fscanf(file, "%d %lf %lf %lf",
+            fscanf(file, "%i %lf %lf %lf",
                    &file_ids[i],
-                   &masses[i],
+                   &file_masses[i],
                    &file_positions[position_count + POSITION_X_INDEX],
                    &file_positions[position_count + POSITION_Y_INDEX]);
 
@@ -160,42 +169,23 @@ int main(int argc, char *argv[])
         fclose(file);
     }
 
-    /*
-        Scatterv allow to scatter data from one process to all processes also if they have different number of elements
-        Scatter data from host to all processes
-    */
-    MPI_Scatterv(file_positions,
-                 recvcounts_positions,
-                 displs_positions,
-                 MPI_DOUBLE,
-                 local_positions,
-                 recvcounts_positions[current_rank],
-                 MPI_DOUBLE,
-                 HOST_RANK,
-                 MPI_COMM_WORLD);
-
-    MPI_Scatterv(file_ids,
-                 recvcounts_ids,
-                 displs_ids,
-                 MPI_INT,
-                 local_ids,
-                 recvcounts_ids[current_rank],
-                 MPI_INT,
-                 HOST_RANK,
-                 MPI_COMM_WORLD);
-
-    // send masses to all processes
-    MPI_Bcast(&masses[0], NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
-
-    for (int i = 0; i < nb_body * SENDED_DATA_SIZE; i += SENDED_DATA_SIZE)
-    {
-        tmp_positions[i + POSITION_X_INDEX] = local_positions[i + POSITION_X_INDEX];
-        tmp_positions[i + POSITION_Y_INDEX] = local_positions[i + POSITION_Y_INDEX];
-    }
+    MPI_Bcast(file_positions, NB_BODY_TOTAL * SENDED_DATA_SIZE, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(file_ids, NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(file_masses, NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
     for (int i = 0; i < nb_body; i++)
     {
+        local_ids[i] = file_ids[i * world_size + current_rank];
         tmp_ids[i] = local_ids[i];
+
+        local_masses[i] = file_masses[i * world_size + current_rank];
+        tmp_masses[i] = local_masses[i];
+
+        int file_index_position = i * world_size * SENDED_DATA_SIZE + (current_rank * SENDED_DATA_SIZE);
+        local_positions[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = file_positions[file_index_position + POSITION_X_INDEX];
+        local_positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = file_positions[file_index_position + POSITION_Y_INDEX];
+        tmp_positions[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = local_positions[i * SENDED_DATA_SIZE + POSITION_X_INDEX];
+        tmp_positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = local_positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX];
     }
 
     double start_time = MPI_Wtime();
@@ -209,18 +199,18 @@ int main(int argc, char *argv[])
         {
 
             /* Compute local_forces using tmp_positions and tmp_ids for each process's body */
-            for (int k = 0; k < nb_body; ++k)
+            for (int k = 0; k < nb_body; k++)
             {
 
                 // get position, id and mass of current body
+                int current_body_id = local_ids[k];
+                double current_body_mass = local_masses[k];
                 double current_body_position[2] = {local_positions[k * SENDED_DATA_SIZE + POSITION_X_INDEX],
                                                    local_positions[k * SENDED_DATA_SIZE + POSITION_Y_INDEX]};
 
-                int current_body_id = local_ids[k];
-                double current_body_mass = masses[current_body_id];
-
-                for (int l = 0; l < nb_body_max; ++l)
+                for (int l = 0; l < nb_body_max; l++)
                 {
+
                     // get id of other body
                     int other_body_id = tmp_ids[l];
 
@@ -230,13 +220,13 @@ int main(int argc, char *argv[])
                         continue;
 
                     // get position and mass of other body
+                    double other_body_mass = tmp_masses[l];
+
                     double other_body_position[2] = {tmp_positions[l * SENDED_DATA_SIZE + POSITION_X_INDEX],
                                                      tmp_positions[l * SENDED_DATA_SIZE + POSITION_Y_INDEX]};
 
-                    double other_body_mass = masses[other_body_id];
-
                     // compute force
-                    double forces[2];
+                    double forces[2] = {0, 0};
                     computeForces(current_body_position, other_body_position, current_body_mass, other_body_mass, &forces[0]);
 
                     // update local forces and tmp forces
@@ -256,10 +246,10 @@ int main(int argc, char *argv[])
             int src_proc = (current_rank + 1) % world_size;
 
             // sendrecv_replace => send and receive in the same buffer
-            // send ids, positions and forces to next process
             MPI_Sendrecv_replace(tmp_ids, nb_body_max, MPI_INT, dest_proc, 0, src_proc, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Sendrecv_replace(tmp_positions, nb_body_max * SENDED_DATA_SIZE, MPI_DOUBLE, dest_proc, 0, src_proc, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Sendrecv_replace(tmp_forces, nb_body_max * SENDED_DATA_SIZE, MPI_DOUBLE, dest_proc, 0, src_proc, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Sendrecv_replace(tmp_masses, nb_body_max, MPI_DOUBLE, dest_proc, 0, src_proc, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
 
         // last compute forces => local_forces + tmp_forces
@@ -268,12 +258,14 @@ int main(int argc, char *argv[])
             local_forces[j * SENDED_DATA_SIZE + FORCE_X_INDEX] += tmp_forces[j * SENDED_DATA_SIZE + FORCE_X_INDEX];
             local_forces[j * SENDED_DATA_SIZE + FORCE_Y_INDEX] += tmp_forces[j * SENDED_DATA_SIZE + FORCE_Y_INDEX];
 
-            double mass_current = masses[local_ids[j]];
+            double mass_current = local_masses[j];
+
             local_forces[j * SENDED_DATA_SIZE + FORCE_X_INDEX] *= -GRAVITATIONAL_CONSTANT * mass_current;
             local_forces[j * SENDED_DATA_SIZE + FORCE_Y_INDEX] *= -GRAVITATIONAL_CONSTANT * mass_current;
 
             /* compute the new position and velocity of the body */
-            double acceleration[2] = {(local_forces[0] * DELTA_T) / mass_current, (local_forces[1] * DELTA_T) / mass_current};
+            double acceleration[2] = {(local_forces[j * SENDED_DATA_SIZE + FORCE_X_INDEX] * DELTA_T) / mass_current,
+                                      (local_forces[j * SENDED_DATA_SIZE + FORCE_Y_INDEX] * DELTA_T) / mass_current};
 
             double velocity[2] = {velocities[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] + acceleration[0],
                                   velocities[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] + acceleration[1]};
@@ -284,8 +276,12 @@ int main(int argc, char *argv[])
             /* update the body positions and velocities */
             velocities[j * SENDED_DATA_SIZE + VELOCITY_X_INDEX] = velocity[0];
             velocities[j * SENDED_DATA_SIZE + VELOCITY_Y_INDEX] = velocity[1];
+
             local_positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] = position[0];
             local_positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] = position[1];
+
+            tmp_positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] = position[0];
+            tmp_positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] = position[1];
         }
 
         // reset forces
@@ -299,9 +295,11 @@ int main(int argc, char *argv[])
 
     int *output_ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
     double *output_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
+    double *output_masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
     MPI_Gatherv(local_ids, nb_body, MPI_INT, output_ids, recvcounts_ids, displs_ids, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
     MPI_Gatherv(local_positions, nb_body * SENDED_DATA_SIZE, MPI_DOUBLE, output_positions, recvcounts_positions, displs_positions, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Gatherv(local_masses, nb_body, MPI_DOUBLE, output_masses, recvcounts_ids, displs_ids, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
     // write the result in a file
     if (current_rank == HOST_RANK)
@@ -319,7 +317,7 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < NB_BODY_TOTAL; i++)
         {
-            fprintf(file, "%d %lf %lf %lf \n", output_ids[i], masses[i], output_positions[position_count + POSITION_X_INDEX], output_positions[position_count + POSITION_Y_INDEX]);
+            fprintf(file, "%d %lf %lf %lf \n", output_ids[i], output_masses[i], output_positions[position_count + POSITION_X_INDEX], output_positions[position_count + POSITION_Y_INDEX]);
             position_count += 2;
         }
 
@@ -327,14 +325,25 @@ int main(int argc, char *argv[])
     }
 
     // free memory
-    free(masses);
     free(velocities);
     free(local_forces);
     free(local_positions);
     free(tmp_forces);
     free(tmp_positions);
+    free(local_ids);
+    free(tmp_ids);
+    free(local_masses);
+    free(tmp_masses);
+    free(file_ids);
+    free(file_positions);
+    free(file_masses);
+    free(recvcounts_ids);
+    free(displs_ids);
+    free(recvcounts_positions);
+    free(displs_positions);
     free(output_ids);
     free(output_positions);
+    free(output_masses);
 
     MPI_Finalize();
     return 0;
