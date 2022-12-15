@@ -78,30 +78,21 @@ int main(int argc, char *argv[])
         - velocities is the velocity of each body of the current process
         - positions is the position of each body of the current process
         - received_positions is the positions received from all processes (used in MPI_Allgatherv)
-        - tmp_positions is a temporary buffer used to get positions from file
+        - file_positions is a temporary buffer used to get positions from file
         - ids is the id of each body
         - masses is the mass of each body
     */
+
     // buffers for MPI communication
     int *ids = nullptr;
     ids = (int *)malloc(real_nb_body_total * sizeof(int));
+
     double *masses = nullptr;
     masses = (double *)malloc(real_nb_body_total * sizeof(double));
 
-    if (current_rank == HOST_RANK)
-    {
-        for (int i = 0; i < real_nb_body_total; i++)
-        {
-            ids[i] = i;
-            masses[i] = randMinmax(10e2, 10e5);
-        }
-    }
+    double *file_positions = nullptr;
+    file_positions = (double *)malloc(real_nb_body_total * SENDED_DATA_SIZE * sizeof(double));
 
-    // broadcast ids and masses to all processes
-    MPI_Bcast(ids, real_nb_body_total, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
-    MPI_Bcast(masses, real_nb_body_total, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
-
-    // velocity is created on each process and store own bodies velocity
     double *velocities = nullptr;
     velocities = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
     memset(velocities, 0, SENDED_DATA_SIZE * nb_body * sizeof(double));
@@ -112,18 +103,50 @@ int main(int argc, char *argv[])
     double *received_positions = nullptr;
     received_positions = (double *)malloc(SENDED_DATA_SIZE * real_nb_body_total * sizeof(double));
 
-    // fill positions buffer
-    for (int i = 0; i < nb_body; i++)
+    /* Host get data from file */
+    if (current_rank == HOST_RANK)
     {
-        positions[i * SENDED_DATA_SIZE + POSITION_X_INDEX] = randMinmax(-100, 100);
-        positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = randMinmax(-100, 100);
+        FILE *file = fopen(INPUT_FILE, "r");
+
+        int position_count = 0;
+
+        if (file == nullptr)
+        {
+            std::cerr << "Error: cannot open file " << INPUT_FILE << std::endl;
+            exit(1);
+        }
+
+        for (int i = 0; i < real_nb_body_total; i++)
+        {
+            fscanf(file, "%d %lf %lf %lf",
+                   &ids[i],
+                   &masses[i],
+                   &file_positions[position_count + POSITION_X_INDEX],
+                   &file_positions[position_count + POSITION_Y_INDEX]);
+
+            position_count += 2;
+        }
+
+        fclose(file);
     }
 
-    // print positions
-    // for (int i = 0; i < nb_body; i++)   
-    // {
-    //     std::cout << current_rank << " - positions[" << i << "] = " << positions[i * SENDED_DATA_SIZE + POSITION_X_INDEX] << " " << positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] << std::endl;
-    // }
+    // scatter file_positions to all processes
+    MPI_Scatterv(
+        file_positions,
+        recvcounts,
+        displs,
+        MPI_DOUBLE,
+        positions,
+        recvcounts[current_rank],
+        MPI_DOUBLE,
+        HOST_RANK,
+        MPI_COMM_WORLD);
+
+
+    // broadcast ids and masses to all processes
+    MPI_Bcast(ids, real_nb_body_total, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(masses, real_nb_body_total, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+
 
 
     // Start time for perf measurements
@@ -254,6 +277,7 @@ int main(int argc, char *argv[])
     free(velocities);
     free(positions);
     free(received_positions);
+
 
 
     MPI_Finalize();
