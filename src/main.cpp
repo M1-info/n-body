@@ -32,11 +32,23 @@ int main(int argc, char *argv[])
     // broadcast nb_body to all processes
     MPI_Bcast(&nb_body, 1, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
-    if (current_rank == HOST_RANK && world_size > 1){
-        // compute nb_body_left
-        nb_body_left = NB_BODY_TOTAL - (nb_body * world_size);
-        nb_body += nb_body_left;
-    }
+
+
+    // BUG: nb_body_left is not computed correctly, so :
+    int real_nb_body_total = nb_body * world_size;
+
+
+    // if (current_rank == HOST_RANK && world_size > 1){
+    //     // compute nb_body_left
+    //     nb_body_left = NB_BODY_TOTAL - (nb_body * world_size);
+    //     nb_body += nb_body_left;
+    // }
+
+
+    // print nb_body for each process
+    // std::cout << current_rank << " -> nb_body: " << nb_body << std::endl;
+    // std::cout << current_rank << " -> nb_body_left: " << nb_body_left << std::endl;
+
 
     // buffer for recvcounts and displs (used in MPI_Allgatherv)
     int *recvcounts = nullptr;
@@ -72,13 +84,13 @@ int main(int argc, char *argv[])
     */
     // buffers for MPI communication
     int *ids = nullptr;
-    ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
+    ids = (int *)malloc(real_nb_body_total * sizeof(int));
     double *masses = nullptr;
-    masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
+    masses = (double *)malloc(real_nb_body_total * sizeof(double));
 
     if (current_rank == HOST_RANK)
     {
-        for (int i = 0; i < NB_BODY_TOTAL; i++)
+        for (int i = 0; i < real_nb_body_total; i++)
         {
             ids[i] = i;
             masses[i] = randMinmax(10e2, 10e5);
@@ -86,8 +98,8 @@ int main(int argc, char *argv[])
     }
 
     // broadcast ids and masses to all processes
-    MPI_Bcast(ids, NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
-    MPI_Bcast(masses, NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(ids, real_nb_body_total, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(masses, real_nb_body_total, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
     // velocity is created on each process and store own bodies velocity
     double *velocities = nullptr;
@@ -98,7 +110,7 @@ int main(int argc, char *argv[])
     positions = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
 
     double *received_positions = nullptr;
-    received_positions = (double *)malloc(SENDED_DATA_SIZE * NB_BODY_TOTAL * sizeof(double));
+    received_positions = (double *)malloc(SENDED_DATA_SIZE * real_nb_body_total * sizeof(double));
 
     // fill positions buffer
     for (int i = 0; i < nb_body; i++)
@@ -135,7 +147,7 @@ int main(int argc, char *argv[])
             MPI_COMM_WORLD);
 
         // if(current_rank == HOST_RANK)
-        //     for (int m = 0; m < NB_BODY_TOTAL; m++)
+        //     for (int m = 0; m < real_nb_body_total; m++)
         //     {
         //         std::cout << "itr=" << i << " => " << received_positions[m * SENDED_DATA_SIZE + POSITION_X_INDEX] << " " << received_positions[m * SENDED_DATA_SIZE + POSITION_Y_INDEX] << std::endl;
         //     }
@@ -151,7 +163,7 @@ int main(int argc, char *argv[])
             double position_current[2] = {  received_positions[id_current * SENDED_DATA_SIZE + POSITION_X_INDEX],
                                             received_positions[id_current * SENDED_DATA_SIZE + POSITION_Y_INDEX]  };
 
-            for (int k = 0; k < NB_BODY_TOTAL; k++)
+            for (int k = 0; k < real_nb_body_total; k++)
             {
                 // get corresponding id of the other body
                 int id_other = ids[k];
@@ -225,7 +237,7 @@ int main(int argc, char *argv[])
 
         int position_count = 0;
 
-        for (int i = 0; i < NB_BODY_TOTAL; i++)
+        for (int i = 0; i < real_nb_body_total; i++)
         {
             fprintf(file, "%d %lf %lf %lf \n", ids[i], masses[i], received_positions[position_count + POSITION_X_INDEX], received_positions[position_count + POSITION_Y_INDEX]);
             position_count += 2;
