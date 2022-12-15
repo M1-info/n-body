@@ -150,8 +150,6 @@ int main(int argc, char *argv[])
             MPI_DOUBLE,
             MPI_COMM_WORLD);
 
-        MPI_Barrier(MPI_COMM_WORLD);
-
         /* For each positions body received (id, mass and position), compute forces applied on the body */
         for (int j = 0; j < nb_body; j++)
         {
