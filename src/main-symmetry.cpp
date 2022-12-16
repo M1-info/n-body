@@ -95,18 +95,18 @@ int main(int argc, char *argv[])
     MPI_Bcast(displs_ids, world_size, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
     /*
-        - velocities => contains the velocities of all bodies for current process
-        - local_forces => contains the forces of all bodies for current process
-        - tmp_forces => contains the forces of all bodies for the process that is currently computing forces
-        - local_positions => contains the positions of all bodies for current process
-        - tmp_positions => contains the positions of all bodies for the process that is currently computing forces
-        - local_ids => contains the ids of all bodies for current process
-        - tmp_ids => contains the ids of all bodies for the process that is currently computing forces
-        - local_masses => contains the masses of all bodies for current process
-        - tmp_masses => contains the masses of all bodies for the process that is currently computing forces
-        - file_positions => contains the positions of all bodies from input file
-        - file_ids => contains the ids of all bodies from input file
-        - file_masses => contains the masses of all bodies from input file
+        - velocities -> contains the velocities of all bodies for current process
+        - local_forces -> contains the forces of all bodies for current process
+        - tmp_forces -> contains the forces of all bodies for the process that is currently computing forces
+        - local_positions -> contains the positions of all bodies for current process
+        - tmp_positions -> contains the positions of all bodies for the process that is currently computing forces
+        - local_ids -> contains the ids of all bodies for current process
+        - tmp_ids -> contains the ids of all bodies for the process that is currently computing forces
+        - local_masses -> contains the masses of all bodies for current process
+        - tmp_masses -> contains the masses of all bodies for the process that is currently computing forces
+        - file_positions -> contains the positions of all bodies from input file
+        - file_ids -> contains the ids of all bodies from input file
+        - file_masses -> contains the masses of all bodies from input file
     */
     double *velocities = nullptr;
     velocities = (double *)malloc(nb_body * SENDED_DATA_SIZE * sizeof(double));
@@ -147,6 +147,7 @@ int main(int argc, char *argv[])
     double *file_masses = nullptr;
     file_masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
+
     /* Host get data from file */
     if (current_rank == HOST_RANK)
     {
@@ -174,6 +175,7 @@ int main(int argc, char *argv[])
         fclose(file);
     }
 
+    /* Broadcast body data to all processes */
     MPI_Bcast(file_positions, NB_BODY_TOTAL * SENDED_DATA_SIZE, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
     MPI_Bcast(file_ids, NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
     MPI_Bcast(file_masses, NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
@@ -193,7 +195,11 @@ int main(int argc, char *argv[])
         tmp_positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = local_positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX];
     }
 
+
+
+    // Start time for perf measurements
     double start_time = MPI_Wtime();
+
 
     /* Main loop */
     for (int i = 0; i < NB_ITERATIONS; i++)
@@ -213,9 +219,9 @@ int main(int argc, char *argv[])
                 double current_body_position[2] = {local_positions[k * SENDED_DATA_SIZE + POSITION_X_INDEX],
                                                    local_positions[k * SENDED_DATA_SIZE + POSITION_Y_INDEX]};
 
+                // iterate through all other bodies
                 for (int l = 0; l < nb_body_max; l++)
                 {
-
                     // get id of other body
                     int other_body_id = tmp_ids[l];
 
@@ -294,10 +300,13 @@ int main(int argc, char *argv[])
         memset(tmp_forces, 0, SENDED_DATA_SIZE * nb_body_max * sizeof(double));
     }
 
+
     double end_time = MPI_Wtime();
     if (current_rank == HOST_RANK)
         printf("Time: %f\n", end_time - start_time);
 
+
+    /* Gather results to host */
     int *output_ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
     double *output_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
     double *output_masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));

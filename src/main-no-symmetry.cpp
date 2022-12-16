@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
 
     if (current_rank == HOST_RANK && world_size > 1)
     {
-        // compute nb_body_left
+        // compute bodies left
         nb_body += nb_body_left;
     }
 
@@ -69,12 +69,12 @@ int main(int argc, char *argv[])
 
     /*
         Create buffers for data
-        - velocities is the velocity of each body of the current process
-        - positions is the position of each body of the current process
-        - received_positions is the positions received from all processes (used in MPI_Allgatherv)
-        - file_positions is a temporary buffer used to get positions from file
-        - ids is the id of each body
-        - masses is the mass of each body
+        - ids -> the id of each body
+        - masses -> the mass of each body
+        - velocities -> the velocity of each body of the current process
+        - file_positions -> a temporary buffer used to get positions from file
+        - positions -> the position of each body of the current process
+        - received_positions -> the positions received from all processes (used in MPI_Allgatherv)
     */
 
     int *ids = nullptr;
@@ -83,12 +83,12 @@ int main(int argc, char *argv[])
     double *masses = nullptr;
     masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
-    double *file_positions = nullptr;
-    file_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
-
     double *velocities = nullptr;
     velocities = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
     memset(velocities, 0, SENDED_DATA_SIZE * nb_body * sizeof(double));
+
+    double *file_positions = nullptr;
+    file_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
 
     double *positions = nullptr;
     positions = (double *)malloc(SENDED_DATA_SIZE * nb_body * sizeof(double));
@@ -139,12 +139,17 @@ int main(int argc, char *argv[])
     MPI_Bcast(ids, NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
     MPI_Bcast(masses, NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
+
+
+
     // Start time for perf measurements
     double start_time = MPI_Wtime();
+
 
     /* Main loop */
     for (int i = 0; i < NB_ITERATIONS; i++)
     {
+        // gather positions from all processes in received_positions
         MPI_Allgatherv(
             positions,
             nb_body * SENDED_DATA_SIZE,
@@ -155,7 +160,8 @@ int main(int argc, char *argv[])
             MPI_DOUBLE,
             MPI_COMM_WORLD);
 
-        /* For each positions body received (id, mass and position), compute forces applied on the body */
+
+        /* For each position of body received (id, mass and position), compute forces applied on the body */
         for (int j = 0; j < nb_body; j++)
         {
             double forces_on_body[2] = {0, 0};
@@ -187,6 +193,7 @@ int main(int argc, char *argv[])
             forces_on_body[0] *= -GRAVITATIONAL_CONSTANT * mass_current;
             forces_on_body[1] *= -GRAVITATIONAL_CONSTANT * mass_current;
 
+
             /* compute the new position and velocity of the body */
             double acceleration[2] = {(forces_on_body[0] * DELTA_T) / mass_current, (forces_on_body[1] * DELTA_T) / mass_current};
 
@@ -204,9 +211,11 @@ int main(int argc, char *argv[])
         }
     }
 
+
     double end_time = MPI_Wtime();
     if (current_rank == HOST_RANK)
         printf("Time: %f\n", end_time - start_time);
+
 
     // write the result in a file
     if (current_rank == HOST_RANK)
@@ -238,6 +247,7 @@ int main(int argc, char *argv[])
     free(velocities);
     free(positions);
     free(received_positions);
+    free(file_positions);
 
     MPI_Finalize();
     return 0;

@@ -16,12 +16,6 @@ void computeForces(double position_current[2], double position_other[2], double 
     double dx = position_current[0] - position_other[0];
     double dy = position_current[1] - position_other[1];
     double norm = sqrt(dx * dx + dy * dy);
-    // if(norm == 0)
-    //     norm = 1;
     forces[0] += (mass_current * mass_other * dx) / (norm * norm * norm);
     forces[1] += (mass_current * mass_other * dy) / (norm * norm * norm);
-
-    // print received arguments
-    // std::cout << "computeForces => " << position_current[0] << " " << position_current[1] << " " << position_other[0] << " " << position_other[1] << " " << mass_current << " " << mass_other 
-    //             << " =======> " << forces[0] << forces[1] << std::endl;
 }
