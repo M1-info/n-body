@@ -2,7 +2,6 @@
 
 int main(int argc, char *argv[])
 {
-
     // init MPI
     MPI_Init(&argc, &argv);
 
@@ -18,6 +17,12 @@ int main(int argc, char *argv[])
     char hostname[MPI_MAX_PROCESSOR_NAME];
     int name_length;
     MPI_Get_processor_name(hostname, &name_length);
+
+
+    if(current_rank == HOST_RANK)
+    {
+        std::cout << "Starting no-symmetry N-body program" << std::endl;
+    }
 
     // number of bodies for each process
     int nb_body;

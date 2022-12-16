@@ -2,7 +2,6 @@
 
 int main(int argc, char *argv[])
 {
-
     // init MPI
     MPI_Init(&argc, &argv);
 
@@ -21,6 +20,12 @@ int main(int argc, char *argv[])
 
     // set error handler to return error code instead of aborting
     MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
+
+
+    if(current_rank == HOST_RANK)
+    {
+        std::cout << "Starting symmetry N-body program" << std::endl;
+    }
 
     /*
         Computation of number of bodies for each process
