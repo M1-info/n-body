@@ -21,10 +21,13 @@ int main(int argc, char *argv[])
     // set error handler to return error code instead of aborting
     MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
 
-
-    if(current_rank == HOST_RANK)
+    if (current_rank == HOST_RANK)
     {
         std::cout << "Starting symmetry N-body program" << std::endl;
+
+#ifdef VISUALISATION
+        std::cout << "Visualisation enabled" << std::endl;
+#endif
     }
 
     /*
@@ -147,7 +150,6 @@ int main(int argc, char *argv[])
     double *file_masses = nullptr;
     file_masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
-
     /* Host get data from file */
     if (current_rank == HOST_RANK)
     {
@@ -195,11 +197,24 @@ int main(int argc, char *argv[])
         tmp_positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX] = local_positions[i * SENDED_DATA_SIZE + POSITION_Y_INDEX];
     }
 
+    /* Buffers used to gather all data at the end of the program et print out result in a file */
+    int *output_ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
+    double *output_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
+    double *output_masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
 
+/* enable visualisation if flag is present before compilation */
+/* in that case, we need to gather right now all masses to pass them at the shader */
+#ifdef VISUALISATION
+    MPI_Gatherv(local_masses, nb_body, MPI_DOUBLE, output_masses, recvcounts_ids, displs_ids, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+
+    Render render;
+
+    if (current_rank == HOST_RANK)
+        render.init(NB_BODY_TOTAL, output_masses);
+#endif
 
     // Start time for perf measurements
     double start_time = MPI_Wtime();
-
 
     /* Main loop */
     for (int i = 0; i < NB_ITERATIONS; i++)
@@ -298,22 +313,26 @@ int main(int argc, char *argv[])
         // reset forces
         memset(local_forces, 0, SENDED_DATA_SIZE * nb_body * sizeof(double));
         memset(tmp_forces, 0, SENDED_DATA_SIZE * nb_body_max * sizeof(double));
-    }
 
+/* If visualisation is enabled, at each iteration we need to gather all positions to update the bodies positions*/
+#ifdef VISUALISATION
+        MPI_Gatherv(local_positions, nb_body * SENDED_DATA_SIZE, MPI_DOUBLE, output_positions, recvcounts_positions, displs_positions, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+
+        if (current_rank == HOST_RANK)
+            render.draw(output_positions, NB_BODY_TOTAL);
+#endif
+    }
 
     double end_time = MPI_Wtime();
     if (current_rank == HOST_RANK)
         printf("Time: %f\n", end_time - start_time);
 
-
-    /* Gather results to host */
-    int *output_ids = (int *)malloc(NB_BODY_TOTAL * sizeof(int));
-    double *output_positions = (double *)malloc(NB_BODY_TOTAL * SENDED_DATA_SIZE * sizeof(double));
-    double *output_masses = (double *)malloc(NB_BODY_TOTAL * sizeof(double));
-
     MPI_Gatherv(local_ids, nb_body, MPI_INT, output_ids, recvcounts_ids, displs_ids, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
+/* In case of visualisation is not enabled, we only gather at the end of script to output data in file */
+#ifndef VISUALISATION
     MPI_Gatherv(local_positions, nb_body * SENDED_DATA_SIZE, MPI_DOUBLE, output_positions, recvcounts_positions, displs_positions, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
     MPI_Gatherv(local_masses, nb_body, MPI_DOUBLE, output_masses, recvcounts_ids, displs_ids, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
+#endif
 
     // write the result in a file
     if (current_rank == HOST_RANK)
@@ -358,6 +377,12 @@ int main(int argc, char *argv[])
     free(output_ids);
     free(output_positions);
     free(output_masses);
+
+// shutdown the visualisation if enabled
+#ifdef VISUALISATION
+    if (current_rank == HOST_RANK)
+        render.shutdown();
+#endif
 
     MPI_Finalize();
     return 0;

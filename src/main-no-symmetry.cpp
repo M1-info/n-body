@@ -18,10 +18,13 @@ int main(int argc, char *argv[])
     int name_length;
     MPI_Get_processor_name(hostname, &name_length);
 
-
-    if(current_rank == HOST_RANK)
+    if (current_rank == HOST_RANK)
     {
         std::cout << "Starting no-symmetry N-body program" << std::endl;
+
+#ifdef VISUALISATION
+        std::cout << "Visualisation enabled" << std::endl;
+#endif
     }
 
     // number of bodies for each process
@@ -139,12 +142,15 @@ int main(int argc, char *argv[])
     MPI_Bcast(ids, NB_BODY_TOTAL, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
     MPI_Bcast(masses, NB_BODY_TOTAL, MPI_DOUBLE, HOST_RANK, MPI_COMM_WORLD);
 
+#ifdef VISUALISATION
+    Render render;
 
-
+    if (current_rank == HOST_RANK)
+        render.init(NB_BODY_TOTAL, masses);
+#endif
 
     // Start time for perf measurements
     double start_time = MPI_Wtime();
-
 
     /* Main loop */
     for (int i = 0; i < NB_ITERATIONS; i++)
@@ -159,7 +165,6 @@ int main(int argc, char *argv[])
             displs,
             MPI_DOUBLE,
             MPI_COMM_WORLD);
-
 
         /* For each position of body received (id, mass and position), compute forces applied on the body */
         for (int j = 0; j < nb_body; j++)
@@ -193,7 +198,6 @@ int main(int argc, char *argv[])
             forces_on_body[0] *= -GRAVITATIONAL_CONSTANT * mass_current;
             forces_on_body[1] *= -GRAVITATIONAL_CONSTANT * mass_current;
 
-
             /* compute the new position and velocity of the body */
             double acceleration[2] = {(forces_on_body[0] * DELTA_T) / mass_current, (forces_on_body[1] * DELTA_T) / mass_current};
 
@@ -209,13 +213,16 @@ int main(int argc, char *argv[])
             positions[j * SENDED_DATA_SIZE + POSITION_X_INDEX] = position[POSITION_X_INDEX];
             positions[j * SENDED_DATA_SIZE + POSITION_Y_INDEX] = position[POSITION_Y_INDEX];
         }
-    }
 
+#ifdef VISUALISATION
+        if (current_rank == HOST_RANK)
+            render.draw(received_positions, NB_BODY_TOTAL);
+#endif
+    }
 
     double end_time = MPI_Wtime();
     if (current_rank == HOST_RANK)
         printf("Time: %f\n", end_time - start_time);
-
 
     // write the result in a file
     if (current_rank == HOST_RANK)
@@ -248,6 +255,12 @@ int main(int argc, char *argv[])
     free(positions);
     free(received_positions);
     free(file_positions);
+
+// shutdown the visualisation if enabled
+#ifdef VISUALISATION
+    if (current_rank == HOST_RANK)
+        render.shutdown();
+#endif
 
     MPI_Finalize();
     return 0;

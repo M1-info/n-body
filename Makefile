@@ -1,21 +1,27 @@
 CCC=mpicxx
 
-CFLAGS=-std=c++17 -Wall -I /urs/local/include -I src/glad/include
-LDFLAGS=-L src/glad/src -lGL -lglad -lglfw -lm
+CFLAGS=-std=c++17 -Wall -I /urs/local/include
+LDFLAGS=
 
 DEBUBFLAG=-g
+DEFINE=
 
-ifeq ($(ARGS),)
-		ARGS=no-symmetry
+ifeq ($(SYMMETRY),)
+		SYMMETRY=no-symmetry
 endif
 
-SRC = src/main-$(ARGS).cpp src/utils.cpp
 
-# SRC = $(wildcard src/imgui/*.cpp)
-# SRC += $(wildcard src/*.cpp)
+SRC = src/main-$(SYMMETRY).cpp src/utils.cpp
+
+ifeq ($(VISUALISATION),true)
+		DEFINE += -DVISUALISATION=true
+		CFLAGS += -I /usr/local/include
+		LDFLAGS += -L src/glad/src -lGL -lglad -lglfw -lm
+		SRC += src/Render.cpp
+endif
+
 
 OBJ = $(SRC:src/.cpp=.o)
-# OBJ += $(SRC:src/include/imgui/.cpp=.o)
 
 BINMAIN = ./bin/
 EXEC = N-Body
@@ -23,13 +29,13 @@ EXEC = N-Body
 all: $(EXEC)
 
 $(EXEC): $(OBJ)
-		$(CCC) $(DEBUBFLAG) -o $(BINMAIN)$@ $^ $(LDFLAGS)
+		$(CCC) $(DEBUBFLAG) $(DEFINE) -o $(BINMAIN)$@ $^ $(LDFLAGS)
 
 %.o: %.cpp
-		$(CCC) $(DEBUBFLAG) -o $@ -c $< $(CFLAGS)
+		$(CCC) $(DEBUBFLAG) $(DEFINE) -o $@ -c $< $(CFLAGS)
 
-clean:
-		rm -rf *.o
+clean-obj:
+		rm -rf bin/*.o
 
-mrproper: clean
+clean-all: clean-obj
 		rm -rf $(BINMAIN)$(EXEC)

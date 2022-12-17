@@ -12,7 +12,10 @@
 #include <mpi.h>
 
 #include "utils.h"
-// #include "Render.h"
+
+#ifdef VISUALISATION
+#include "Render.h"
+#endif
 
 #define GRAVITATIONAL_CONSTANT 6.67408e-11 // m / (kg * s^2)
 #define DELTA_T 1
