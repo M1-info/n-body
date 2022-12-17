@@ -5,13 +5,8 @@ LDFLAGS=-L src/glad/src -lGL -lglad -lglfw -lm
 
 DEBUBFLAG=-g
 
-SRC = src/main.cpp src/utils.cpp
-
-# SRC = $(wildcard src/imgui/*.cpp)
-# SRC += $(wildcard src/*.cpp)
-
+SRC = $(wildcard src/*.cpp)
 OBJ = $(SRC:src/.cpp=.o)
-# OBJ += $(SRC:src/include/imgui/.cpp=.o)
 
 BINMAIN = ./bin/
 BINOBJ = ./obj/

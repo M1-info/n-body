@@ -1,12 +1,11 @@
 #include "Render.h"
-#include <iostream>
 
 Render::Render()
 {
     m_width = 800;
     m_height = 600;
     m_title = "N-Body";
-    m_clear_color = {1.0f, 0.0f, 0.0f};
+    m_clear_color = {0.0f, 0.0f, 0.0f};
 }
 
 Render::Render(int width, int height)
@@ -14,7 +13,7 @@ Render::Render(int width, int height)
     m_width = width;
     m_height = height;
     m_title = "N-Body";
-    m_clear_color = {1.0f, 0.0f, 0.0f};
+    m_clear_color = {0.0f, 0.0f, 0.0f};
 }
 
 Render::Render(int width, int height, char *title)
@@ -22,16 +21,14 @@ Render::Render(int width, int height, char *title)
     m_width = width;
     m_height = height;
     m_title = title;
-    m_clear_color = {1.0f, 0.0f, 0.0f};
+    m_clear_color = {0.0f, 0.0f, 0.0f};
 }
 
 Render::~Render()
 {
-    shutdown();
-    m_window = nullptr;
 }
 
-void Render::init()
+void Render::init(int vbo_size, double *masses)
 {
 
     if (!glfwInit())
@@ -46,8 +43,6 @@ void Render::init()
     }
 
     glfwMakeContextCurrent(m_window);
-    glfwSetWindowUserPointer(m_window, this);
-    glfwSetWindowSizeCallback(m_window, resize);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
@@ -55,99 +50,98 @@ void Render::init()
         return;
     }
 
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO &io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    glEnable(GL_PROGRAM_POINT_SIZE);
 
-    ImGui::StyleColorsDark();
-    ImGui_ImplGlfw_InitForOpenGL(m_window, true);
-    ImGui_ImplOpenGL3_Init(GLSL_VERSION);
+    createShader();
+    setUpBuffers(vbo_size, masses);
+
+    glm::mat4 projection = glm::ortho(-500.0f, 500.0f, -500.0f, 500.0f, -1.0f, 1.0f);
+    glm::mat4 view = glm::mat4(1.0f);
+    glm::mat4 model = glm::mat4(1.0f);
+    glm::mat4 mvp = projection * view * model;
+
+    glUseProgram(m_shader);
+    glUniformMatrix4fv(glGetUniformLocation(m_shader, "mvp"), 1, GL_FALSE, &mvp[0][0]);
+    glUseProgram(0);
 }
 
-void Render::render()
+void Render::draw(double *vbo, int vbo_size)
 {
+    glfwPollEvents();
 
-    ImGuiIO &io = ImGui::GetIO();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-    while (!glfwWindowShouldClose(m_window))
-    {
-        glfwPollEvents();
+    glBindBuffer(GL_ARRAY_BUFFER, m_points_vbo);
+    glBufferData(GL_ARRAY_BUFFER, vbo_size * sizeof(double) * 2, vbo, GL_DYNAMIC_DRAW);
 
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
+    glUseProgram(m_shader);
+    glBindVertexArray(m_vao);
 
-        {
+    glDrawArrays(GL_POINTS, 0, vbo_size);
 
-            static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
-            ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+    glBindVertexArray(0);
+    glUseProgram(0);
 
-            const ImGuiViewport *viewport = ImGui::GetMainViewport();
-            ImGui::SetNextWindowPos(viewport->WorkPos);
-            ImGui::SetNextWindowSize(viewport->WorkSize);
-            ImGui::SetNextWindowViewport(viewport->ID);
-            window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-            window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-
-            if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
-                window_flags |= ImGuiWindowFlags_NoBackground;
-
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-            ImGui::Begin("N-Body", nullptr, window_flags);
-
-            ImGui::PopStyleVar();
-
-            if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
-            {
-                ImGuiID dockspace_id = ImGui::GetID("N-Body");
-                ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
-            }
-
-            ImGui::Begin("Background Color");
-            ImGui::Text("Change the background color");
-            ImGui::ColorEdit3("Clear Color", (float *)&m_clear_color);
-            ImGui::End();
-
-            ImGui::Begin("Frame Rate");
-            ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-            ImGui::End();
-
-            ImGui::End();
-        }
-
-        /* Render here */
-        ImGui::Render();
-        glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(m_clear_color[0], m_clear_color[1], m_clear_color[2], 1.0f);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        /* Swap front and back buffers */
-        glfwSwapBuffers(m_window);
-    }
+    glfwSwapBuffers(m_window);
 }
 
 void Render::shutdown()
 {
-
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
     glfwDestroyWindow(m_window);
     glfwTerminate();
 }
 
-void Render::resize(GLFWwindow *window, int width, int height)
+void Render::createShader()
 {
-    Render *render = reinterpret_cast<Render *>(glfwGetWindowUserPointer(window));
 
-    if (width == render->m_width && height == render->m_height)
-        return;
+    std::string vertex_shader_source = readShaderSource("./assets/shader.vert");
+    std::string fragment_shader_source = readShaderSource("./assets/shader.frag");
 
-    render->m_width = width;
-    render->m_height = height;
+    const GLchar *vertex_shader = vertex_shader_source.c_str();
+    const GLchar *fragment_shader = fragment_shader_source.c_str();
 
-    glfwSetWindowSize(render->m_window, render->m_width, render->m_height);
-    glViewport(0, 0, render->m_width, render->m_height);
+    GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
+    GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
+
+    glShaderSource(VertexShaderID, 1, &vertex_shader, NULL);
+    glCompileShader(VertexShaderID);
+
+    glShaderSource(FragmentShaderID, 1, &fragment_shader, NULL);
+    glCompileShader(FragmentShaderID);
+
+    m_shader = glCreateProgram();
+    glAttachShader(m_shader, VertexShaderID);
+    glAttachShader(m_shader, FragmentShaderID);
+    glLinkProgram(m_shader);
+
+    glDeleteShader(VertexShaderID);
+    glDeleteShader(FragmentShaderID);
+}
+
+void Render::setUpBuffers(int vbo_size, double *masses)
+{
+    glGenBuffers(1, &m_points_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, m_points_vbo);
+    glBufferData(GL_ARRAY_BUFFER, vbo_size * 2 * sizeof(GL_DOUBLE), nullptr, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenBuffers(1, &m_masses_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, m_masses_vbo);
+    glBufferData(GL_ARRAY_BUFFER, vbo_size * sizeof(GL_DOUBLE), masses, GL_STATIC_DRAW);
+
+    glGenVertexArrays(1, &m_vao);
+    glBindVertexArray(m_vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, m_points_vbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_DOUBLE, GL_FALSE, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, m_masses_vbo);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 1, GL_DOUBLE, GL_FALSE, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindVertexArray(0);
 }
