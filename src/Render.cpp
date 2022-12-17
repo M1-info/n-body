@@ -55,7 +55,7 @@ void Render::init(int vbo_size, double *masses)
     createShader();
     setUpBuffers(vbo_size, masses);
 
-    glm::mat4 projection = glm::ortho(-200.0f, 200.0f, -200.0f, 200.0f, -1.0f, 1.0f);
+    glm::mat4 projection = glm::ortho(-500.0f, 500.0f, -500.0f, 500.0f, -1.0f, 1.0f);
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 mvp = projection * view * model;
@@ -67,8 +67,6 @@ void Render::init(int vbo_size, double *masses)
 
 void Render::draw(double *vbo, int vbo_size)
 {
-    glfwPollEvents();
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -84,6 +82,7 @@ void Render::draw(double *vbo, int vbo_size)
     glUseProgram(0);
 
     glfwSwapBuffers(m_window);
+    glfwPollEvents();
 }
 
 void Render::shutdown()

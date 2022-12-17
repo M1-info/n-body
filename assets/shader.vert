@@ -8,10 +8,10 @@ out vec4 position;
 
 void main()
 {
-    float mass=(aMass-1.)/10000.;
+    float mass=(aMass-1.)/1000.;
     
     gl_Position=mvp*vec4(aPos,0.,1.);
-    gl_PointSize=mass/20.;
+    gl_PointSize=mass;
     
     position=gl_Position;
 }

@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
     // so that they can allocate the right amount of memory
     MPI_Bcast(&nb_body_max, 1, MPI_INT, HOST_RANK, MPI_COMM_WORLD);
 
-    // create rcvcounts and displs arrays for scatterv
+    // create rcvcounts and displs arrays for gatherv
     int *recvcounts_positions = (int *)malloc(world_size * sizeof(int));
     int *displs_positions = (int *)malloc(world_size * sizeof(int));
 
@@ -219,7 +219,6 @@ int main(int argc, char *argv[])
     /* Main loop */
     for (int i = 0; i < NB_ITERATIONS; i++)
     {
-
         /* Iterate through all process */
         for (int j = 0; j < world_size; j++)
         {

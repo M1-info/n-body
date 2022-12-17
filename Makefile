@@ -5,17 +5,20 @@ LDFLAGS=
 
 DEBUBFLAG=-g
 DEFINE=
+HAS_SYMMETRY=
 
-ifeq ($(SYMMETRY),)
-		SYMMETRY=no-symmetry
+ifeq ($(SYMMETRY),true)
+		HAS_SYMMETRY=symmetry
+else
+		HAS_SYMMETRY=no-symmetry
 endif
 
 
-SRC = src/main-$(SYMMETRY).cpp src/utils.cpp
+SRC = src/main-$(HAS_SYMMETRY).cpp src/utils.cpp
 
 ifeq ($(VISUALISATION),true)
 		DEFINE += -DVISUALISATION=true
-		CFLAGS += -I /usr/local/include
+		CFLAGS += -I src/glad/include
 		LDFLAGS += -L src/glad/src -lGL -lglad -lglfw -lm
 		SRC += src/Render.cpp
 endif
