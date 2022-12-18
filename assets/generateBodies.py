@@ -10,8 +10,8 @@ f = open(FILE_NAME, "w+").close()
 for i in range(BODIES_COUNT):
     id = i
     m = random.uniform(1000, 2000)
-    x = random.uniform(-100, 100)
-    y = random.uniform(-100, 100)
+    x = random.uniform(-5, 5)
+    y = random.uniform(-5, 5)
     f = open(FILE_NAME, "a")
     f.write(str(id) + " " + str(m) + " " + str(x) + " " + str(y) + "\n")
 f.close()

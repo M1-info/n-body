@@ -21,7 +21,7 @@
 #define DELTA_T 1
 #define SENDED_DATA_SIZE 2
 #define NB_BODY_TOTAL 800
-#define NB_ITERATIONS 1000
+#define NB_ITERATIONS 2000
 
 #define HOST_RANK 0
 

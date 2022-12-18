@@ -2,8 +2,8 @@
 
 Render::Render()
 {
-    m_width = 800;
-    m_height = 600;
+    m_width = 1000;
+    m_height = 800;
     m_title = "N-Body";
     m_clear_color = {0.0f, 0.0f, 0.0f};
 }
